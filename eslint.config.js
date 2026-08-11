@@ -29,4 +29,16 @@ export default tseslint.config(
       '@typescript-eslint/no-namespace': ['error', { allowDeclarations: true }],
     },
   },
+  {
+    files: ['jest.config.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        module: 'readonly',
+        require: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
 )
