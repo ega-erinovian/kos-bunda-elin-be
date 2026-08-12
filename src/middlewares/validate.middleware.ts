@@ -11,7 +11,12 @@ export function validate(schema: ZodSchema, source: 'body' | 'query' | 'params' 
         errors: result.error.flatten().fieldErrors,
       })
     }
-    req[source] = result.data
+    Object.defineProperty(req, source, {
+      value: result.data,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    })
     next()
   }
 }
