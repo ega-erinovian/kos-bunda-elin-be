@@ -39,7 +39,14 @@ export async function getKamarList(query: KamarListQuery) {
       orderBy: { nomor: 'asc' },
       skip: (query.page - 1) * query.limit,
       take: query.limit,
-      include: { _count: { select: { penyewa: true } } },
+      include: {
+        _count: { select: { penyewa: true } },
+        penyewa: {
+          where: { aktif: true },
+          select: { id: true, nama: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     }),
     prisma.kamar.count({ where }),
   ])
