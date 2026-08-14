@@ -29,6 +29,7 @@ export async function getKamarList(query: KamarListQuery) {
 
   const where: Prisma.KamarWhereInput = { propertyId }
   if (query.status) where.status = query.status
+  if (query.lantai) where.lantai = query.lantai
   if (query.search) {
     where.nomor = { contains: query.search, mode: 'insensitive' }
   }
@@ -39,7 +40,14 @@ export async function getKamarList(query: KamarListQuery) {
       orderBy: { nomor: 'asc' },
       skip: (query.page - 1) * query.limit,
       take: query.limit,
-      include: { _count: { select: { penyewa: true } } },
+      include: {
+        _count: { select: { penyewa: true } },
+        penyewa: {
+          where: { aktif: true },
+          select: { id: true, nama: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     }),
     prisma.kamar.count({ where }),
   ])
