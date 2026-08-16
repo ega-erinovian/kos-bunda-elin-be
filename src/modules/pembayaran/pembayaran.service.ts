@@ -5,9 +5,12 @@ import type {
   CreatePembayaranInput,
   PembayaranListQuery,
   UpdatePembayaranInput,
+  CreatePaymentRecordInput,
 } from './pembayaran.schema.js'
 import { Prisma, StatusPembayaran } from '@prisma/client'
 import { startOfDay, endOfDay, subDays } from 'date-fns'
+import { computePembayaranStatus, isOverpayment } from '../../utils/paymentStatus.util.js'
+import { Decimal } from 'decimal.js'
 
 async function findPembayaranById(id: string) {
   return prisma.pembayaran.findFirst({
@@ -65,6 +68,9 @@ export async function getPembayaranList(query: PembayaranListQuery) {
         where.status = { in: ['BELUM_BAYAR', 'TERLAMBAT'] }
         break
       }
+      case 'sebagian':
+        where.status = StatusPembayaran.SEBAGIAN
+        break
       case 'belum_bayar':
         where.status = StatusPembayaran.BELUM_BAYAR
         break
@@ -179,29 +185,11 @@ export async function updatePembayaran(id: string, input: UpdatePembayaranInput)
     throw new AppError('Pembayaran tidak ditemukan', 404)
   }
 
-  // Auto-update status LUNAS jika tanggalBayar diisi dan status bukan LUNAS
-  let finalStatus = input.status
-  if (input.tanggalBayar && input.status !== StatusPembayaran.LUNAS) {
-    finalStatus = StatusPembayaran.LUNAS
-  }
-
-  // Auto-set tanggalBayar = null jika status diubah ke BELUM_BAYAR/TERLAMBAT
-  let finalTanggalBayar = input.tanggalBayar
-  if (
-    finalStatus &&
-    (finalStatus === StatusPembayaran.BELUM_BAYAR ||
-      finalStatus === StatusPembayaran.TERLAMBAT) &&
-    input.tanggalBayar === undefined
-  ) {
-    finalTanggalBayar = null
-  }
-
+  // Only allow updates to catatan and tanggalJatuhTempo
   return prisma.pembayaran.update({
     where: { id: current.id },
     data: {
-      status: finalStatus,
-      tanggalBayar: finalTanggalBayar,
-      nominal: input.nominal,
+      tanggalJatuhTempo: input.tanggalJatuhTempo,
       catatan: input.catatan,
     },
     include: {
@@ -238,6 +226,125 @@ export async function markPembayaranLunas(id: string) {
           id: true,
           nama: true,
           kamar: { select: { nomor: true } },
+        },
+      },
+    },
+  })
+}
+
+export async function addPaymentRecord(
+  pembayaranId: string,
+  input: CreatePaymentRecordInput,
+  adminId?: string
+) {
+  const propertyId = getDefaultPropertyId()
+
+  return prisma.$transaction(async (tx) => {
+    // 1. Lock and read the Pembayaran row
+    const pembayaran = await tx.pembayaran.findFirst({
+      where: {
+        id: pembayaranId,
+        penyewa: { kamar: { propertyId } },
+      },
+    })
+
+    if (!pembayaran) {
+      throw new AppError('Pembayaran tidak ditemukan', 404)
+    }
+
+    // 2. Insert the PaymentRecord
+    const paymentRecord = await tx.paymentRecord.create({
+      data: {
+        pembayaranId: pembayaran.id,
+        paymentMethod: input.paymentMethod,
+        paymentDate: input.paymentDate,
+        amountPaid: input.amountPaid,
+        referenceNumber: input.referenceNumber,
+        notes: input.notes,
+        financialAccountId: input.financialAccountId,
+        createdByAdminId: adminId,
+      },
+    })
+
+    // 3. Recompute totalDibayar
+    const newTotalDibayar = new Decimal(pembayaran.totalDibayar).plus(
+      new Decimal(input.amountPaid)
+    )
+
+    // 4. Recompute status
+    const newStatus = computePembayaranStatus(
+      pembayaran.nominal,
+      newTotalDibayar,
+      pembayaran.tanggalJatuhTempo,
+      new Date()
+    )
+
+    // 5. Update Pembayaran
+    const updateData: Prisma.PembayaranUpdateInput = {
+      totalDibayar: newTotalDibayar,
+      status: newStatus,
+    }
+
+    // Set tanggalBayar when crossing the LUNAS threshold
+    if (
+      newStatus === StatusPembayaran.LUNAS &&
+      pembayaran.status !== StatusPembayaran.LUNAS
+    ) {
+      updateData.tanggalBayar = input.paymentDate
+    }
+
+    const updatedPembayaran = await tx.pembayaran.update({
+      where: { id: pembayaran.id },
+      data: updateData,
+      include: {
+        penyewa: {
+          select: {
+            id: true,
+            nama: true,
+            kamar: { select: { nomor: true } },
+          },
+        },
+      },
+    })
+
+    // Check for overpayment and add warning flag
+    const overpaid = isOverpayment(updatedPembayaran.nominal, newTotalDibayar)
+
+    return {
+      pembayaran: updatedPembayaran,
+      paymentRecord,
+      warning: overpaid ? 'overpaid' : undefined,
+    }
+  })
+}
+
+/**
+ * Get payment history for a bill
+ */
+export async function getPaymentHistory(pembayaranId: string) {
+  const propertyId = getDefaultPropertyId()
+
+  // Verify bill exists and belongs to property
+  const pembayaran = await prisma.pembayaran.findFirst({
+    where: {
+      id: pembayaranId,
+      penyewa: { kamar: { propertyId } },
+    },
+  })
+
+  if (!pembayaran) {
+    throw new AppError('Pembayaran tidak ditemukan', 404)
+  }
+
+  return prisma.paymentRecord.findMany({
+    where: { pembayaranId },
+    orderBy: { paymentDate: 'asc' },
+    include: {
+      createdByAdmin: {
+        select: {
+          id: true,
+          nama: true,
+          email: true,
         },
       },
     },

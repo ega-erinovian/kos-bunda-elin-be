@@ -5,6 +5,7 @@ import {
   pembayaranListQuerySchema,
   createPembayaranSchema,
   updatePembayaranSchema,
+  createPaymentRecordSchema,
 } from './pembayaran.schema.js'
 
 const router = Router()
@@ -18,5 +19,13 @@ router.post('/', validate(createPembayaranSchema, 'body'), pembayaranController.
 router.patch('/:id', validate(updatePembayaranSchema, 'body'), pembayaranController.update)
 
 router.patch('/:id/mark-lunas', pembayaranController.markLunas)
+
+router.post(
+  '/:id/payments',
+  validate(createPaymentRecordSchema, 'body'),
+  pembayaranController.addPayment
+)
+
+router.get('/:id/payments', pembayaranController.getPaymentHistory)
 
 export default router
