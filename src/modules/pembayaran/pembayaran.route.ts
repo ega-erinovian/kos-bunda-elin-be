@@ -1,30 +1,20 @@
 import { Router } from 'express'
+import * as pembayaranController from './pembayaran.controller.js'
 import { validate } from '../../middlewares/validate.middleware.js'
-import { requireAuth } from '../../middlewares/auth.middleware.js'
 import {
+  pembayaranListQuerySchema,
   createPembayaranSchema,
   updatePembayaranSchema,
-  idParamsSchema,
-  pembayaranListQuerySchema,
 } from './pembayaran.schema.js'
-import * as pembayaranController from './pembayaran.controller.js'
 
 const router = Router()
 
-router.get(
-  '/',
-  requireAuth,
-  validate(pembayaranListQuerySchema, 'query'),
-  pembayaranController.list,
-)
-router.post('/', requireAuth, validate(createPembayaranSchema), pembayaranController.create)
-router.get('/:id', requireAuth, validate(idParamsSchema, 'params'), pembayaranController.getById)
-router.patch(
-  '/:id',
-  requireAuth,
-  validate(idParamsSchema, 'params'),
-  validate(updatePembayaranSchema),
-  pembayaranController.update,
-)
+router.get('/', validate(pembayaranListQuerySchema, 'query'), pembayaranController.list)
+
+router.get('/:id', pembayaranController.getById)
+
+router.post('/', validate(createPembayaranSchema, 'body'), pembayaranController.create)
+
+router.patch('/:id', validate(updatePembayaranSchema, 'body'), pembayaranController.update)
 
 export default router
