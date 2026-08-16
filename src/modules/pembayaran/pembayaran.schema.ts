@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const pembayaranListQuerySchema = z.object({
   status: z
-    .enum(['akan_jatuh_tempo', 'menunggak', 'belum_bayar', 'lunas', 'terlambat'])
+    .enum(['akan_jatuh_tempo', 'menunggak', 'belum_bayar', 'sebagian', 'lunas', 'terlambat'])
     .optional(),
   penyewaId: z.string().uuid().optional(),
   periodeBulan: z.coerce.number().int().min(1).max(12).optional(),
@@ -24,16 +24,35 @@ export const createPembayaranSchema = z.object({
 })
 
 export const updatePembayaranSchema = z.object({
-  status: z.enum(['BELUM_BAYAR', 'LUNAS', 'TERLAMBAT']).optional(),
-  tanggalBayar: z.coerce.date().optional().nullable(),
-  nominal: z
-    .number()
-    .positive({ message: 'nominal harus lebih dari 0' })
-    .or(z.string().regex(/^\d+(\.\d{1,2})?$/).transform(Number))
-    .optional(),
+  tanggalJatuhTempo: z.coerce.date().optional(),
   catatan: z.string().optional().nullable(),
+})
+
+export const createPaymentRecordSchema = z.object({
+  paymentMethod: z.enum(['CASH', 'BANK_TRANSFER', 'QRIS', 'E_WALLET', 'OTHER'], {
+    message: 'paymentMethod harus salah satu dari: CASH, BANK_TRANSFER, QRIS, E_WALLET, OTHER',
+  }),
+  paymentDate: z.coerce.date({
+    message: 'paymentDate harus tanggal valid',
+  }).refine(
+    (date) => {
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      tomorrow.setHours(23, 59, 59, 999)
+      return date <= tomorrow
+    },
+    { message: 'paymentDate tidak boleh lebih dari 1 hari ke depan' }
+  ),
+  amountPaid: z
+    .number()
+    .positive({ message: 'amountPaid harus lebih dari 0' })
+    .or(z.string().regex(/^\d+(\.\d{1,2})?$/).transform(Number)),
+  referenceNumber: z.string().max(100).optional(),
+  notes: z.string().max(500).optional(),
+  financialAccountId: z.string().uuid().optional(),
 })
 
 export type PembayaranListQuery = z.infer<typeof pembayaranListQuerySchema>
 export type CreatePembayaranInput = z.infer<typeof createPembayaranSchema>
 export type UpdatePembayaranInput = z.infer<typeof updatePembayaranSchema>
+export type CreatePaymentRecordInput = z.infer<typeof createPaymentRecordSchema>
