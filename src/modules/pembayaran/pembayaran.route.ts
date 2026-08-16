@@ -17,4 +17,6 @@ router.post('/', validate(createPembayaranSchema, 'body'), pembayaranController.
 
 router.patch('/:id', validate(updatePembayaranSchema, 'body'), pembayaranController.update)
 
+router.patch('/:id/mark-lunas', pembayaranController.markLunas)
+
 export default router

@@ -46,3 +46,12 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     next(err)
   }
 }
+
+export async function markLunas(req: Request, res: Response, next: NextFunction) {
+  try {
+    const pembayaran = await pembayaranService.markPembayaranLunas(req.params.id as string)
+    return apiSuccess(res, pembayaran)
+  } catch (err) {
+    next(err)
+  }
+}
