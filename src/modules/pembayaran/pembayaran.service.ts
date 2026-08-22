@@ -11,8 +11,9 @@ import { Prisma, StatusPembayaran } from '@prisma/client'
 import { startOfDay, endOfDay, subDays } from 'date-fns'
 import { computePembayaranStatus, isOverpayment } from '../../utils/paymentStatus.util.js'
 import { Decimal } from 'decimal.js'
+import crypto from 'crypto'
 
-async function findPembayaranById(id: string) {
+async function findPembayaranById(id: string, includePaymentRecords = false) {
   return prisma.pembayaran.findFirst({
     where: {
       id,
@@ -24,9 +25,19 @@ async function findPembayaranById(id: string) {
           id: true,
           nama: true,
           noHp: true,
-          kamar: { select: { nomor: true, lantai: true } },
+          kamar: { select: { id: true, nomor: true, lantai: true } },
         },
       },
+      paymentRecords: includePaymentRecords
+        ? {
+            orderBy: { paymentDate: 'asc' },
+            include: {
+              createdByAdmin: {
+                select: { id: true, nama: true },
+              },
+            },
+          }
+        : false,
     },
   })
 }
@@ -51,11 +62,9 @@ export async function getPembayaranList(query: PembayaranListQuery) {
     where.periodeTahun = query.periodeTahun
   }
 
-  // Dynamic status queries
   if (query.status) {
     switch (query.status) {
       case 'akan_jatuh_tempo': {
-        // H-3 sampai H (hari ini)
         const hMinus3 = startOfDay(subDays(today, 3))
         const h = endOfDay(today)
         where.tanggalJatuhTempo = { gte: hMinus3, lte: h }
@@ -63,7 +72,6 @@ export async function getPembayaranList(query: PembayaranListQuery) {
         break
       }
       case 'menunggak': {
-        // Sudah lewat jatuh tempo (H+1 dst)
         where.tanggalJatuhTempo = { lt: today }
         where.status = { in: ['BELUM_BAYAR', 'TERLAMBAT'] }
         break
@@ -107,7 +115,7 @@ export async function getPembayaranList(query: PembayaranListQuery) {
 }
 
 export async function getPembayaranById(id: string) {
-  const pembayaran = await findPembayaranById(id)
+  const pembayaran = await findPembayaranById(id, true)
   if (!pembayaran) {
     throw new AppError('Pembayaran tidak ditemukan', 404)
   }
@@ -117,7 +125,6 @@ export async function getPembayaranById(id: string) {
 export async function createPembayaran(input: CreatePembayaranInput) {
   const propertyId = getDefaultPropertyId()
 
-  // Validasi penyewa exists dan dalam property yang sama
   const penyewa = await prisma.penyewa.findFirst({
     where: {
       id: input.penyewaId,
@@ -130,7 +137,6 @@ export async function createPembayaran(input: CreatePembayaranInput) {
     throw new AppError('Penyewa tidak ditemukan atau tidak aktif', 404)
   }
 
-  // Cek duplikasi periode pembayaran untuk penyewa yang sama
   const existing = await prisma.pembayaran.findUnique({
     where: {
       penyewaId_periodeBulan_periodeTahun: {
@@ -148,7 +154,6 @@ export async function createPembayaran(input: CreatePembayaranInput) {
     )
   }
 
-  // Tentukan status awal berdasarkan tanggal jatuh tempo
   const today = startOfDay(new Date())
   const jatuhTempo = startOfDay(input.tanggalJatuhTempo)
   let status: StatusPembayaran = StatusPembayaran.BELUM_BAYAR
@@ -232,14 +237,75 @@ export async function markPembayaranLunas(id: string) {
   })
 }
 
+/**
+ * Generate idempotency key from request headers or derive deterministic fallback
+ * §1 item 6: Header is REQUIRED in the contract, but we keep deterministic fallback
+ * as defense-in-depth for any future non-FE client
+ */
+function getIdempotencyKey(
+  headerKey: string | undefined,
+  pembayaranId: string,
+  input: CreatePaymentRecordInput
+): string {
+  if (headerKey) {
+    return headerKey
+  }
+
+  // Deterministic fallback (not part of documented contract)
+  const payload = JSON.stringify({
+    pembayaranId,
+    amountPaid: input.amountPaid.toString(),
+    paymentDate: input.paymentDate.toISOString(),
+    referenceNumber: input.referenceNumber || '',
+  })
+  return crypto.createHash('sha256').update(payload).digest('hex')
+}
+
 export async function addPaymentRecord(
   pembayaranId: string,
   input: CreatePaymentRecordInput,
-  adminId?: string
+  adminId?: string,
+  idempotencyKeyHeader?: string
 ) {
   const propertyId = getDefaultPropertyId()
+  const idempotencyKey = getIdempotencyKey(idempotencyKeyHeader, pembayaranId, input)
 
   return prisma.$transaction(async (tx) => {
+    // 0. Check for existing payment with same idempotency key
+    const existing = await tx.paymentRecord.findUnique({
+      where: { idempotencyKey },
+      include: {
+        pembayaran: {
+          include: {
+            penyewa: {
+              select: {
+                id: true,
+                nama: true,
+                kamar: { select: { id: true, nomor: true } },
+              },
+            },
+          },
+        },
+        createdByAdmin: {
+          select: { id: true, nama: true },
+        },
+      },
+    })
+
+    if (existing) {
+      // Return the original result (idempotent replay)
+      const overpaid = isOverpayment(
+        existing.pembayaran.nominal,
+        existing.pembayaran.totalDibayar
+      )
+      return {
+        pembayaran: existing.pembayaran,
+        paymentRecord: existing,
+        warning: overpaid ? ('overpaid' as const) : undefined,
+        isReplay: true, // Flag to indicate this was an idempotent replay
+      }
+    }
+
     // 1. Lock and read the Pembayaran row
     const pembayaran = await tx.pembayaran.findFirst({
       where: {
@@ -262,7 +328,13 @@ export async function addPaymentRecord(
         referenceNumber: input.referenceNumber,
         notes: input.notes,
         financialAccountId: input.financialAccountId,
+        idempotencyKey,
         createdByAdminId: adminId,
+      },
+      include: {
+        createdByAdmin: {
+          select: { id: true, nama: true },
+        },
       },
     })
 
@@ -301,7 +373,7 @@ export async function addPaymentRecord(
           select: {
             id: true,
             nama: true,
-            kamar: { select: { nomor: true } },
+            kamar: { select: { id: true, nomor: true } },
           },
         },
       },
@@ -313,7 +385,8 @@ export async function addPaymentRecord(
     return {
       pembayaran: updatedPembayaran,
       paymentRecord,
-      warning: overpaid ? 'overpaid' : undefined,
+      warning: overpaid ? ('overpaid' as const) : undefined,
+      isReplay: false, // This is a new record
     }
   })
 }

@@ -142,6 +142,7 @@ model PaymentRecord {
   referenceNumber    String?
   notes              String?
   financialAccountId String?
+  idempotencyKey     String?       @unique
   createdByAdminId   String?
   createdByAdmin     Admin?        @relation(fields: [createdByAdminId], references: [id])
   createdAt          DateTime      @default(now())
