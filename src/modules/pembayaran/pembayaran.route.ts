@@ -18,8 +18,6 @@ router.post('/', validate(createPembayaranSchema, 'body'), pembayaranController.
 
 router.patch('/:id', validate(updatePembayaranSchema, 'body'), pembayaranController.update)
 
-router.patch('/:id/mark-lunas', pembayaranController.markLunas)
-
 router.post(
   '/:id/payments',
   validate(createPaymentRecordSchema, 'body'),

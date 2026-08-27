@@ -209,34 +209,6 @@ export async function updatePembayaran(id: string, input: UpdatePembayaranInput)
   })
 }
 
-export async function markPembayaranLunas(id: string) {
-  const current = await findPembayaranById(id)
-  if (!current) {
-    throw new AppError('Pembayaran tidak ditemukan', 404)
-  }
-
-  if (current.status === StatusPembayaran.LUNAS) {
-    throw new AppError('Pembayaran sudah lunas', 400)
-  }
-
-  return prisma.pembayaran.update({
-    where: { id: current.id },
-    data: {
-      status: StatusPembayaran.LUNAS,
-      tanggalBayar: new Date(),
-    },
-    include: {
-      penyewa: {
-        select: {
-          id: true,
-          nama: true,
-          kamar: { select: { nomor: true } },
-        },
-      },
-    },
-  })
-}
-
 /**
  * Generate idempotency key from request headers or derive deterministic fallback
  * §1 item 6: Header is REQUIRED in the contract, but we keep deterministic fallback
