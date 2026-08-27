@@ -19,8 +19,17 @@ enum StatusKamar {
 
 enum StatusPembayaran {
   BELUM_BAYAR
+  SEBAGIAN
   LUNAS
   TERLAMBAT
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  QRIS
+  E_WALLET
+  OTHER
 }
 
 enum JenisPesan {
@@ -55,6 +64,7 @@ model Admin {
   propertyId   String
   property     Property @relation(fields: [propertyId], references: [id])
   refreshTokens RefreshToken[]
+  paymentRecords PaymentRecord[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -112,11 +122,30 @@ model Pembayaran {
   status            StatusPembayaran @default(BELUM_BAYAR)
   tanggalBayar      DateTime?
   nominal           Decimal          @db.Decimal(12, 2)
+  totalDibayar      Decimal          @default(0) @db.Decimal(12, 2)
   catatan           String?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  paymentRecords    PaymentRecord[]
+
   @@unique([penyewaId, periodeBulan, periodeTahun])
+}
+
+model PaymentRecord {
+  id                 String        @id @default(uuid())
+  pembayaranId       String
+  pembayaran         Pembayaran    @relation(fields: [pembayaranId], references: [id])
+  paymentMethod      PaymentMethod
+  paymentDate        DateTime
+  amountPaid         Decimal       @db.Decimal(12, 2)
+  referenceNumber    String?
+  notes              String?
+  financialAccountId String?
+  idempotencyKey     String?       @unique
+  createdByAdminId   String?
+  createdByAdmin     Admin?        @relation(fields: [createdByAdminId], references: [id])
+  createdAt          DateTime      @default(now())
 }
 
 model PushSubscription {
