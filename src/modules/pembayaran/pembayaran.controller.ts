@@ -66,16 +66,6 @@ export async function update(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function markLunas(req: Request, res: Response, next: NextFunction) {
-  try {
-    const pembayaran = await pembayaranService.markPembayaranLunas(req.params.id as string)
-    const mapped = mapPembayaranList(pembayaran)
-    return apiSuccess(res, mapped)
-  } catch (err) {
-    next(err)
-  }
-}
-
 export async function addPayment(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     // Extract Idempotency-Key header (required per §1 item 6)
@@ -88,10 +78,8 @@ export async function addPayment(req: AuthRequest, res: Response, next: NextFunc
       idempotencyKey
     )
     
-    // Map response with Decimal → number conversion
     const mapped = mapAddPaymentRecordResponse(result)
     
-    // Return 200 for idempotent replay, 201 for new record
     const statusCode = result.isReplay ? 200 : 201
     return apiSuccess(res, mapped, statusCode)
   } catch (err) {
