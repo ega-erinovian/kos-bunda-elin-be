@@ -9,14 +9,6 @@ import {
   mapAddPaymentRecordResponse,
 } from './pembayaran.mapper.js'
 
-interface AuthRequest extends Request {
-  user?: {
-    id: string
-    role: string
-    propertyId?: string
-  }
-}
-
 export async function list(req: Request, res: Response, next: NextFunction) {
   try {
     const query = req.query as unknown as PembayaranListQuery
@@ -35,7 +27,6 @@ export async function list(req: Request, res: Response, next: NextFunction) {
 export async function getById(req: Request, res: Response, next: NextFunction) {
   try {
     const pembayaran = await pembayaranService.getPembayaranById(req.params.id as string)
-    // Map detail response WITH paymentRecords (§1 item 4)
     const mapped = mapPembayaranDetail(pembayaran)
     return apiSuccess(res, mapped)
   } catch (err) {
@@ -66,9 +57,8 @@ export async function update(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function addPayment(req: AuthRequest, res: Response, next: NextFunction) {
+export async function addPayment(req: Request, res: Response, next: NextFunction) {
   try {
-    // Extract Idempotency-Key header (required per §1 item 6)
     const idempotencyKey = req.headers['idempotency-key'] as string | undefined
     
     const result = await pembayaranService.addPaymentRecord(
