@@ -43,6 +43,21 @@ enum StatusKirim {
   GAGAL
 }
 
+enum NotificationChannel {
+  WEB_PUSH
+  WHATSAPP
+  EMAIL
+  SMS
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
 model Property {
   id        String   @id @default(uuid())
   nama      String
@@ -50,9 +65,11 @@ model Property {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  admins        Admin[]
-  kamar         Kamar[]
-  reminderConfig ReminderConfig?
+  admins             Admin[]
+  kamar              Kamar[]
+  reminderConfig     ReminderConfig?
+  messageTemplates   MessageTemplate[]
+  notificationLogs   NotificationLog[]
 }
 
 model Admin {
@@ -128,6 +145,7 @@ model Pembayaran {
   updatedAt         DateTime         @updatedAt
 
   paymentRecords    PaymentRecord[]
+  notificationLogs  NotificationLog[]
 
   @@unique([penyewaId, periodeBulan, periodeTahun])
 }
@@ -159,29 +177,49 @@ model PushSubscription {
 }
 
 model MessageTemplate {
-  id        String     @id @default(uuid())
-  jenis     JenisPesan
-  isi       String
-  aktif     Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id         String              @id @default(uuid())
+  propertyId String
+  property   Property            @relation(fields: [propertyId], references: [id])
+  channel    NotificationChannel @default(WEB_PUSH)
+  jenis      JenisPesan
+  isi        String
+  aktif      Boolean             @default(true)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([propertyId, channel, jenis])
 }
 
 model ReminderConfig {
-  id          String   @id @default(uuid())
-  propertyId  String   @unique
-  property    Property @relation(fields: [propertyId], references: [id])
-  hMinusHari  Int[]    @default([3, 1, 0])
-  hPlusHari   Int[]    @default([3, 7])
-  updatedAt   DateTime @updatedAt
+  id         String                @id @default(uuid())
+  propertyId String                @unique
+  property   Property              @relation(fields: [propertyId], references: [id])
+  offsets    Int[]                 @default([-7, -3, -1, 0, 1, 3, 7])
+  channels   NotificationChannel[] @default([WEB_PUSH])
+  active     Boolean               @default(true)
+  updatedAt  DateTime              @updatedAt
 }
 
 model NotificationLog {
-  id         String      @id @default(uuid())
-  penyewaId  String
-  penyewa    Penyewa     @relation(fields: [penyewaId], references: [id])
-  jenis      JenisPesan
-  isiRingkas String
-  waktuKirim DateTime    @default(now())
-  status     StatusKirim
+  id                String              @id @default(uuid())
+  propertyId        String
+  property          Property            @relation(fields: [propertyId], references: [id])
+  penyewaId         String?
+  penyewa           Penyewa?            @relation(fields: [penyewaId], references: [id])
+  pembayaranId      String?
+  pembayaran        Pembayaran?         @relation(fields: [pembayaranId], references: [id])
+  channel           NotificationChannel
+  jenis             JenisPesan
+  recipient         String
+  providerMessageId String?
+  status            NotificationStatus  @default(PENDING)
+  retryCount        Int                 @default(0)
+  isiRingkas        String
+  dedupeKey         String              @unique
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  failureReason     String?
+  createdAt         DateTime            @default(now())
 }
