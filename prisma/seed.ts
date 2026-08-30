@@ -43,33 +43,48 @@ async function main() {
     },
   })
 
-  // Seed default message templates (WEB_PUSH channel) if none exist
-  const existingTemplates = await prisma.messageTemplate.count({ where: { propertyId: property.id } })
-  if (existingTemplates === 0) {
-    const defaultTemplates: Array<{ channel: 'WEB_PUSH'; jenis: 'REMINDER_JATUH_TEMPO' | 'REMINDER_TUNGGAKAN' | 'PENGUMUMAN'; isi: string }> = [
-      {
-        channel: 'WEB_PUSH',
-        jenis: 'REMINDER_JATUH_TEMPO',
-        isi: 'Halo {{nama}}, kamar {{kamar}} akan jatuh tempo pada {{tanggalJatuhTempo}}. Nominal: Rp {{nominal}}. Sisa tagihan: Rp {{sisaTagihan}} untuk periode {{periode}}.',
-      },
-      {
-        channel: 'WEB_PUSH',
-        jenis: 'REMINDER_TUNGGAKAN',
-        isi: 'Halo {{nama}}, kamar {{kamar}} menunggak sejak {{tanggalJatuhTempo}}. Sisa tagihan: Rp {{sisaTagihan}}. Mohon segera lakukan pembayaran untuk periode {{periode}}.',
-      },
-      {
-        channel: 'WEB_PUSH',
-        jenis: 'PENGUMUMAN',
-        isi: 'Halo {{nama}}, ada pengumuman untuk penghuni kamar {{kamar}} dari {{namaProperty}}.',
-      },
-    ]
-    for (const t of defaultTemplates) {
-      await prisma.messageTemplate.upsert({
-        where: { propertyId_channel_jenis: { propertyId: property.id, channel: t.channel as any, jenis: t.jenis as any } },
-        update: {},
-        create: { propertyId: property.id, channel: t.channel as any, jenis: t.jenis as any, isi: t.isi, aktif: true },
-      })
-    }
+  const defaultTemplates: Array<{
+    channel: 'WEB_PUSH' | 'WHATSAPP'
+    jenis: 'REMINDER_JATUH_TEMPO' | 'REMINDER_TUNGGAKAN' | 'PENGUMUMAN'
+    isi: string
+  }> = [
+    {
+      channel: 'WEB_PUSH',
+      jenis: 'REMINDER_JATUH_TEMPO',
+      isi: 'Halo {{nama}}, kamar {{kamar}} akan jatuh tempo pada {{tanggalJatuhTempo}}. Nominal: Rp {{nominal}}. Sisa tagihan: Rp {{sisaTagihan}} untuk periode {{periode}}.',
+    },
+    {
+      channel: 'WEB_PUSH',
+      jenis: 'REMINDER_TUNGGAKAN',
+      isi: 'Halo {{nama}}, kamar {{kamar}} menunggak sejak {{tanggalJatuhTempo}}. Sisa tagihan: Rp {{sisaTagihan}}. Mohon segera lakukan pembayaran untuk periode {{periode}}.',
+    },
+    {
+      channel: 'WEB_PUSH',
+      jenis: 'PENGUMUMAN',
+      isi: 'Halo {{nama}}, ada pengumuman untuk penghuni kamar {{kamar}} dari {{namaProperty}}.',
+    },
+    {
+      channel: 'WHATSAPP',
+      jenis: 'REMINDER_JATUH_TEMPO',
+      isi: 'Halo {{nama}}, kamar {{kamar}} akan jatuh tempo pada {{tanggalJatuhTempo}}. Nominal: Rp {{nominal}}. Sisa tagihan: Rp {{sisaTagihan}} untuk periode {{periode}}. Mohon segera lakukan pembayaran. Terima kasih.',
+    },
+    {
+      channel: 'WHATSAPP',
+      jenis: 'REMINDER_TUNGGAKAN',
+      isi: 'Halo {{nama}}, kamar {{kamar}} menunggak sejak {{tanggalJatuhTempo}}. Sisa tagihan: Rp {{sisaTagihan}}. Mohon segera lakukan pembayaran untuk periode {{periode}}.',
+    },
+    {
+      channel: 'WHATSAPP',
+      jenis: 'PENGUMUMAN',
+      isi: 'Halo {{nama}}, ada pengumuman untuk penghuni kamar {{kamar}} dari {{namaProperty}}: {{isi}}. - Pengelola',
+    },
+  ]
+  for (const t of defaultTemplates) {
+    await prisma.messageTemplate.upsert({
+      where: { propertyId_channel_jenis: { propertyId: property.id, channel: t.channel as any, jenis: t.jenis as any } },
+      update: {},
+      create: { propertyId: property.id, channel: t.channel as any, jenis: t.jenis as any, isi: t.isi, aktif: true },
+    })
   }
 
   const kamarData = [

@@ -29,6 +29,18 @@ const envSchema = z.object({
 
   REMINDER_CRON_SCHEDULE: z.string().default('0 8 * * *'),
   TZ: z.string().default('Asia/Jakarta'),
+
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
+  WHATSAPP_APP_SECRET: z.string().optional(),
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  WHATSAPP_API_VERSION: z.string().default('v20.0'),
+  WHATSAPP_MAX_RETRY: z.coerce.number().int().min(0).max(10).default(3),
+
+  NOTIFICATION_RETRY_CRON_SCHEDULE: z.string().default('*/15 * * * *'),
+
+  REPORTS_MAX_RANGE_DAYS: z.coerce.number().int().positive().default(1100),
 })
 
 const parsed = envSchema.safeParse(process.env)

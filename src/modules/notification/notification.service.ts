@@ -1,13 +1,14 @@
 import prisma from '../../config/prisma.js'
 import logger from '../../config/logger.js'
 import { Prisma, NotificationStatus } from '@prisma/client'
-import type { NotificationPayload } from './notification.types.js'
+import type { NotificationChannel } from '@prisma/client'
+import type { NotificationPayload, NotificationProvider } from './notification.types.js'
 import { webPushProvider } from './providers/webpush.provider.js'
+import { whatsAppProvider } from './providers/whatsapp.provider.js'
 
-type ChannelProviderMap = Record<string, typeof webPushProvider>
-
-const providers: ChannelProviderMap = {
+const providers: Partial<Record<NotificationChannel, NotificationProvider>> = {
   WEB_PUSH: webPushProvider,
+  WHATSAPP: whatsAppProvider,
 }
 
 /**
