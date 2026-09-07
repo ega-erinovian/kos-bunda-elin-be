@@ -8,12 +8,16 @@ import reminderConfigRoutes from '../modules/reminder-config/reminder-config.rou
 import notificationLogRoutes from '../modules/notification-log/notification-log.route.js'
 import notificationRoutes from '../modules/notification/notification.route.js'
 import pushRoutes from '../modules/push/push.route.js'
+import whatsappWebhookRoutes from '../modules/notification/whatsapp-webhook.route.js'
 
 const router = Router()
 
 router.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
+
+// Public — must be before requireAuth (Meta/Evolution call unauthenticated, HMAC-verified)
+router.use('/notification', whatsappWebhookRoutes)
 
 router.use('/auth', authRoutes)
 router.use('/kamar', kamarRoutes)

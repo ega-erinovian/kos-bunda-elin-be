@@ -1,6 +1,7 @@
 import logger from '../../../config/logger.js'
 import { NotificationStatus } from '@prisma/client'
 import type { NotificationPayload, NotificationProvider, NotificationProviderResult } from '../notification.types.js'
+import { env } from '../../../config/env.js'
 import {
   isWhatsAppConfigured,
   sendWhatsAppTextMessage,
@@ -48,10 +49,17 @@ export const whatsAppProvider: NotificationProvider = {
   async send(payload: NotificationPayload): Promise<NotificationProviderResult> {
     // 1. Guard — missing config must not crash the app (§5.19)
     if (!isWhatsAppConfigured()) {
-      logger.warn('WhatsApp send skipped — Cloud API not configured')
+      const prov = (env as any).WHATSAPP_PROVIDER || 'cloud'
+      logger.warn({ provider: prov }, 'WhatsApp send skipped — provider not configured')
+      const hint =
+        prov === 'evolution'
+          ? 'Evolution API not configured (set EVOLUTION_API_URL / EVOLUTION_API_KEY / EVOLUTION_INSTANCE_NAME)'
+          : prov === 'mock'
+            ? 'mock provider misconfigured (should never happen)'
+            : 'WhatsApp Cloud API not configured (set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID)'
       return {
         status: NotificationStatus.FAILED,
-        failureReason: 'WhatsApp Cloud API not configured (set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID)',
+        failureReason: hint,
       }
     }
 

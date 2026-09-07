@@ -10,4 +10,6 @@ router.use(requireAuth)
 
 router.get('/', validate(notificationLogListQuerySchema, 'query'), controller.list)
 
+router.post('/:id/resend', controller.resend)
+
 export default router

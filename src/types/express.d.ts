@@ -29,6 +29,8 @@ declare global {
       property?: {
         id: string
       }
+
+      rawBody?: string
     }
   }
 }

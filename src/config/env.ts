@@ -30,6 +30,7 @@ const envSchema = z.object({
   REMINDER_CRON_SCHEDULE: z.string().default('0 8 * * *'),
   TZ: z.string().default('Asia/Jakarta'),
 
+  WHATSAPP_PROVIDER: z.enum(['cloud', 'evolution', 'mock']).default('cloud'),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
@@ -37,6 +38,10 @@ const envSchema = z.object({
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_API_VERSION: z.string().default('v20.0'),
   WHATSAPP_MAX_RETRY: z.coerce.number().int().min(0).max(10).default(3),
+
+  EVOLUTION_API_URL: z.string().optional(),
+  EVOLUTION_API_KEY: z.string().optional(),
+  EVOLUTION_INSTANCE_NAME: z.string().optional(),
 
   NOTIFICATION_RETRY_CRON_SCHEDULE: z.string().default('*/15 * * * *'),
 
