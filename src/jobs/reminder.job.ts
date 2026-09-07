@@ -1,8 +1,11 @@
 import cron from 'node-cron'
 import { env } from '../config/env.js'
 import logger from '../config/logger.js'
-import prisma from '../config/prisma.js'
+import { runReminderSweep } from '../modules/notification/reminder.service.js'
 
+/**
+ * Starts the daily reminder cron.
+ */
 export function startReminderJob() {
   const schedule = env.REMINDER_CRON_SCHEDULE || '0 8 * * *'
   const tz = env.TZ || 'Asia/Jakarta'
@@ -17,18 +20,25 @@ export function startReminderJob() {
   cron.schedule(
     schedule,
     async () => {
+      const startedAt = Date.now()
+
       try {
-        logger.info('Reminder cron tick — placeholder (Phase 9 will implement sweep)')
-        
-        const configs = await prisma.reminderConfig.findMany({
-          where: { active: true },
-          select: { propertyId: true, offsets: true, channels: true },
-        })
-        logger.info({ count: configs.length }, 'Reminder configs active')
+        logger.info('Reminder cron tick — starting sweep')
+
+        const result = await runReminderSweep()
+
+        logger.info(
+          {
+            sent: result.sent,
+            skipped: result.skipped,
+            durationMs: Date.now() - startedAt,
+          },
+          'Reminder cron finished',
+        )
       } catch (err) {
-        logger.error({ err }, 'Reminder cron failed')
+        logger.error({ err, durationMs: Date.now() - startedAt }, 'Reminder cron failed')
       }
     },
-    { timezone: tz }
+    { timezone: tz },
   )
 }

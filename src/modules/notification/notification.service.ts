@@ -25,8 +25,11 @@ export function computeDedupeKey(
   return `${entityPart}:${payload.channel}:${payload.jenis}:${yyyyMMdd}`
 }
 
-export async function sendNotification(payload: NotificationPayload) {
-  const dedupeKey = computeDedupeKey(payload)
+export async function sendNotification(
+  payload: NotificationPayload,
+  opts?: { dedupeDate?: Date },
+) {
+  const dedupeKey = computeDedupeKey(payload, opts?.dedupeDate ?? new Date())
   const provider = providers[payload.channel]
 
   if (!provider) {
