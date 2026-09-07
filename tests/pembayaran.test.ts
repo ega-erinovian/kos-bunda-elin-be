@@ -81,14 +81,21 @@ describe('Payment Module - Phase 5', () => {
 
   describe('POST /api/pembayaran', () => {
     it('should create a pembayaran with correct response shape', async () => {
+      const future = new Date()
+      future.setDate(future.getDate() + 10)
+      future.setHours(0, 0, 0, 0)
+      const futureBulan = future.getMonth() + 1
+      const futureTahun = future.getFullYear()
+      const futureIso = future.toISOString().slice(0, 10)
+
       const response = await request(app)
         .post('/api/pembayaran')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           penyewaId,
-          periodeBulan: 8,
-          periodeTahun: 2026,
-          tanggalJatuhTempo: '2026-08-25',
+          periodeBulan: futureBulan,
+          periodeTahun: futureTahun,
+          tanggalJatuhTempo: futureIso,
           nominal: 1500000,
           catatan: 'Test pembayaran',
         })
@@ -96,18 +103,16 @@ describe('Payment Module - Phase 5', () => {
 
       pembayaranId = response.body.data.id
 
-      // Verify response shape
       expect(response.body.data).toMatchObject({
         id: expect.any(String),
         penyewaId,
-        periodeBulan: 8,
-        periodeTahun: 2026,
+        periodeBulan: futureBulan,
+        periodeTahun: futureTahun,
         status: 'BELUM_BAYAR',
-        nominal: 1500000, // §1 item 7: must be number
-        totalDibayar: 0, // §1 item 7: must be number
+        nominal: 1500000,
+        totalDibayar: 0,
       })
 
-      // Ensure monetary fields are numbers, not strings
       expect(typeof response.body.data.nominal).toBe('number')
       expect(typeof response.body.data.totalDibayar).toBe('number')
     })
@@ -124,10 +129,8 @@ describe('Payment Module - Phase 5', () => {
       
       if (response.body.data.length > 0) {
         const pembayaran = response.body.data[0]
-        // §1 item 4: paymentRecords should NOT be present on list responses
         expect(pembayaran.paymentRecords).toBeUndefined()
         
-        // Verify monetary fields are numbers
         expect(typeof pembayaran.nominal).toBe('number')
         expect(typeof pembayaran.totalDibayar).toBe('number')
       }
