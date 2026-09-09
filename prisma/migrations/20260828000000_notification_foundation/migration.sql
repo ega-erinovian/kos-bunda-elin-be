@@ -1,4 +1,4 @@
-﻿
+
 -- CreateEnum
 CREATE TYPE "NotificationChannel" AS ENUM ('WEB_PUSH', 'WHATSAPP', 'EMAIL', 'SMS');
 -- CreateEnum

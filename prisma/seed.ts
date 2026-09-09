@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import bcrypt from 'bcrypt'
+import { seedFinanceCategories } from './seed-finance-categories.js'
 
 const prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL!) })
 
@@ -86,6 +87,8 @@ async function main() {
       create: { propertyId: property.id, channel: t.channel as any, jenis: t.jenis as any, isi: t.isi, aktif: true },
     })
   }
+
+  await seedFinanceCategories(prisma, property.id)
 
   const kamarData = [
     { nomor: '1A', lantai: '1', harga: 750000, status: 'TERISI' as const },

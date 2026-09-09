@@ -7,7 +7,6 @@ import { startNotificationRetryJob } from './modules/notification/notification-r
 
 const server = app.listen(env.PORT, () => {
   logger.info(`Server running on port ${env.PORT} [${env.NODE_ENV}]`)
-  // phase 10: start cron jobs (no-op in test where cron strings may be disabled)
   if (env.NODE_ENV !== 'test') {
     startReminderJob()
     startNotificationRetryJob()

@@ -9,6 +9,10 @@ import notificationLogRoutes from '../modules/notification-log/notification-log.
 import notificationRoutes from '../modules/notification/notification.route.js'
 import pushRoutes from '../modules/push/push.route.js'
 import whatsappWebhookRoutes from '../modules/notification/whatsapp-webhook.route.js'
+import financialAccountRoutes from '../modules/financial-account/financial-account.route.js'
+import financialCategoryRoutes from '../modules/financial-category/financial-category.route.js'
+import financialTransactionRoutes from '../modules/financial-transaction/financial-transaction.route.js'
+import auditRoutes from '../modules/audit/audit.route.js'
 
 const router = Router()
 
@@ -16,7 +20,6 @@ router.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-// Public — must be before requireAuth (Meta/Evolution call unauthenticated, HMAC-verified)
 router.use('/notification', whatsappWebhookRoutes)
 
 router.use('/auth', authRoutes)
@@ -28,5 +31,10 @@ router.use('/reminder-config', reminderConfigRoutes)
 router.use('/notification-log', notificationLogRoutes)
 router.use('/notification', notificationRoutes)
 router.use('/push', pushRoutes)
+
+router.use('/finance/accounts', financialAccountRoutes)
+router.use('/finance/categories', financialCategoryRoutes)
+router.use('/finance/transactions', financialTransactionRoutes)
+router.use('/audit-log', auditRoutes)
 
 export default router

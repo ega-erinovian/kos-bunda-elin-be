@@ -11,8 +11,6 @@ const app = express()
 
 app.use(helmet())
 app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }))
-// Capture rawBody for WhatsApp webhook HMAC verification (phase 10)
-// ponytail: store raw buffer string on req.rawBody — cheap, no extra dep
 app.use(
   express.json({
     verify: (req: any, _res, buf) => {

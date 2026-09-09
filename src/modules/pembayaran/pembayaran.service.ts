@@ -12,6 +12,8 @@ import { startOfDay, endOfDay, subDays } from 'date-fns'
 import { computePembayaranStatus, isOverpayment } from '../../utils/paymentStatus.util.js'
 import { Decimal } from 'decimal.js'
 import crypto from 'crypto'
+import { writeAuditLog } from '../audit/audit.service.js'
+import { createTransactionForPayment } from '../finance/finance-integration.service.js'
 
 async function findPembayaranById(id: string, includePaymentRecords = false) {
   return prisma.pembayaran.findFirst({
@@ -35,6 +37,7 @@ async function findPembayaranById(id: string, includePaymentRecords = false) {
               createdByAdmin: {
                 select: { id: true, nama: true },
               },
+              financialTransaction: true,
             },
           }
         : false,
@@ -190,7 +193,6 @@ export async function updatePembayaran(id: string, input: UpdatePembayaranInput)
     throw new AppError('Pembayaran tidak ditemukan', 404)
   }
 
-  // Only allow updates to catatan and tanggalJatuhTempo
   return prisma.pembayaran.update({
     where: { id: current.id },
     data: {
@@ -211,8 +213,6 @@ export async function updatePembayaran(id: string, input: UpdatePembayaranInput)
 
 /**
  * Generate idempotency key from request headers or derive deterministic fallback
- * §1 item 6: Header is REQUIRED in the contract, but we keep deterministic fallback
- * as defense-in-depth for any future non-FE client
  */
 function getIdempotencyKey(
   headerKey: string | undefined,
@@ -223,7 +223,6 @@ function getIdempotencyKey(
     return headerKey
   }
 
-  // Deterministic fallback (not part of documented contract)
   const payload = JSON.stringify({
     pembayaranId,
     amountPaid: input.amountPaid.toString(),
@@ -243,7 +242,6 @@ export async function addPaymentRecord(
   const idempotencyKey = getIdempotencyKey(idempotencyKeyHeader, pembayaranId, input)
 
   return prisma.$transaction(async (tx) => {
-    // 0. Check for existing payment with same idempotency key
     const existing = await tx.paymentRecord.findUnique({
       where: { idempotencyKey },
       include: {
@@ -261,11 +259,11 @@ export async function addPaymentRecord(
         createdByAdmin: {
           select: { id: true, nama: true },
         },
+        financialTransaction: true,
       },
     })
 
     if (existing) {
-      // Return the original result (idempotent replay)
       const overpaid = isOverpayment(
         existing.pembayaran.nominal,
         existing.pembayaran.totalDibayar
@@ -273,12 +271,12 @@ export async function addPaymentRecord(
       return {
         pembayaran: existing.pembayaran,
         paymentRecord: existing,
+        financialTransaction: (existing as any).financialTransaction,
         warning: overpaid ? ('overpaid' as const) : undefined,
-        isReplay: true, // Flag to indicate this was an idempotent replay
+        isReplay: true,
       }
     }
 
-    // 1. Lock and read the Pembayaran row
     const pembayaran = await tx.pembayaran.findFirst({
       where: {
         id: pembayaranId,
@@ -290,7 +288,13 @@ export async function addPaymentRecord(
       throw new AppError('Pembayaran tidak ditemukan', 404)
     }
 
-    // 2. Insert the PaymentRecord
+    if (input.financialAccountId) {
+      const accountCheck = await (tx as any).financialAccount.findFirst({
+        where: { id: input.financialAccountId, propertyId },
+      })
+      if (!accountCheck) throw new AppError('FinancialAccount tidak ditemukan', 404)
+    }
+
     const paymentRecord = await tx.paymentRecord.create({
       data: {
         pembayaranId: pembayaran.id,
@@ -307,29 +311,26 @@ export async function addPaymentRecord(
         createdByAdmin: {
           select: { id: true, nama: true },
         },
+        financialTransaction: true,
       },
     })
 
-    // 3. Recompute totalDibayar
-    const newTotalDibayar = new Decimal(pembayaran.totalDibayar).plus(
-      new Decimal(input.amountPaid)
+    const newTotalDibayar = new Decimal(pembayaran.totalDibayar as any).plus(
+      new Decimal(input.amountPaid as any)
     )
 
-    // 4. Recompute status
     const newStatus = computePembayaranStatus(
-      pembayaran.nominal,
+      pembayaran.nominal as any,
       newTotalDibayar,
       pembayaran.tanggalJatuhTempo,
       new Date()
     )
 
-    // 5. Update Pembayaran
     const updateData: Prisma.PembayaranUpdateInput = {
-      totalDibayar: newTotalDibayar,
+      totalDibayar: newTotalDibayar as any,
       status: newStatus,
     }
 
-    // Set tanggalBayar when crossing the LUNAS threshold
     if (
       newStatus === StatusPembayaran.LUNAS &&
       pembayaran.status !== StatusPembayaran.LUNAS
@@ -351,14 +352,36 @@ export async function addPaymentRecord(
       },
     })
 
-    // Check for overpayment and add warning flag
-    const overpaid = isOverpayment(updatedPembayaran.nominal, newTotalDibayar)
+    const financialTransaction = await createTransactionForPayment(tx as any, {
+      propertyId,
+      paymentRecord,
+      pembayaran: updatedPembayaran,
+      adminId,
+    })
+
+    await writeAuditLog(tx as any, {
+      propertyId,
+      adminId,
+      entity: 'Pembayaran',
+      entityId: pembayaran.id,
+      action: 'PAYMENT_RECORDED',
+      afterValue: {
+        pembayaran: updatedPembayaran,
+        paymentRecord,
+        financialTransaction,
+      },
+    })
+
+    const overpaid = isOverpayment(updatedPembayaran.nominal as any, newTotalDibayar)
+
+    const paymentRecordWithTx = { ...paymentRecord, financialTransaction }
 
     return {
       pembayaran: updatedPembayaran,
-      paymentRecord,
+      paymentRecord: paymentRecordWithTx,
+      financialTransaction,
       warning: overpaid ? ('overpaid' as const) : undefined,
-      isReplay: false, // This is a new record
+      isReplay: false,
     }
   })
 }
@@ -369,7 +392,6 @@ export async function addPaymentRecord(
 export async function getPaymentHistory(pembayaranId: string) {
   const propertyId = getDefaultPropertyId()
 
-  // Verify bill exists and belongs to property
   const pembayaran = await prisma.pembayaran.findFirst({
     where: {
       id: pembayaranId,
@@ -392,6 +414,7 @@ export async function getPaymentHistory(pembayaranId: string) {
           email: true,
         },
       },
+      financialTransaction: true,
     },
   })
 }
