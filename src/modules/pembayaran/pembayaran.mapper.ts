@@ -95,6 +95,8 @@ export function mapPembayaranDetail(pembayaran: any) {
  * §1 item 7: converts Decimal to number
  */
 export function mapPaymentRecord(record: any) {
+  const financialTransactionId =
+    record.financialTransaction?.id || record.financialTransactionId || undefined
   return {
     id: record.id,
     pembayaranId: record.pembayaranId,
@@ -104,9 +106,7 @@ export function mapPaymentRecord(record: any) {
     referenceNumber: record.referenceNumber || undefined,
     notes: record.notes || undefined,
     financialAccountId: record.financialAccountId || undefined,
-    // §1 item 5: financialTransactionId will be present once Phase 12 links it
-    // For now, this field doesn't exist on the schema yet, but the mapper is ready
-    financialTransactionId: undefined, // TODO: Phase 12 - read from relation
+    financialTransactionId,
     createdByAdmin: record.createdByAdmin && typeof record.createdByAdmin === 'object'
       ? {
           id: record.createdByAdmin.id,
