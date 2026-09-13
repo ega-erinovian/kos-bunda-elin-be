@@ -148,3 +148,55 @@ export async function softDeleteTransaction(propertyId: string, id: string, admi
     return updated
   })
 }
+
+export async function reverseTransaction(propertyId: string, id: string, adminId: string | undefined, reason: string) {
+  const orig = await prisma.financialTransaction.findFirst({ where: { id, propertyId } })
+  if (!orig) throw new AppError('FinancialTransaction tidak ditemukan', 404)
+  if (orig.deletedAt) throw new AppError('FinancialTransaction sudah dihapus', 400)
+  if (['RENT_PAYMENT', 'DEPOSIT', 'DEPOSIT_REFUND'].includes(orig.source)) {
+    throw new AppError('Hanya transaksi manual yang dapat direversal', 400)
+  }
+
+  const alreadyReversed = await prisma.financialTransaction.findFirst({
+    where: { propertyId, source: 'ADJUSTMENT', description: { contains: `Reversal of ${orig.id}` } },
+  })
+  if (alreadyReversed) throw new AppError('Transaksi sudah direversal', 409)
+
+  return prisma.$transaction(async (tx) => {
+    const reversalType = orig.type === 'EXPENSE' ? 'INCOME' : 'EXPENSE'
+
+    const reversal = await tx.financialTransaction.create({
+      data: {
+        propertyId,
+        accountId: orig.accountId,
+        categoryId: orig.categoryId,
+        type: reversalType as any,
+        source: 'ADJUSTMENT' as any,
+        amount: orig.amount as any,
+        transactionDate: new Date(),
+        description: `Reversal of ${orig.id}: ${reason}`,
+        referenceNumber: orig.referenceNumber,
+        createdByAdminId: adminId,
+      },
+    })
+
+    const updatedOrigDescription = `${orig.description ?? ''} | Reversed by ${reversal.id}: ${reason}`.trim().replace(/^\|\s*/, '')
+    await tx.financialTransaction.update({
+      where: { id: orig.id },
+      data: { description: updatedOrigDescription },
+    })
+
+    const action = orig.type === 'EXPENSE' ? 'EXPENSE_REVERSED' : 'TRANSACTION_REVERSED'
+    await writeAuditLog(tx, {
+      propertyId,
+      adminId,
+      entity: 'FinancialTransaction',
+      entityId: orig.id,
+      action,
+      beforeValue: orig,
+      afterValue: reversal,
+    })
+
+    return reversal
+  })
+}
