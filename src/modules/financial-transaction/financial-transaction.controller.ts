@@ -36,3 +36,11 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
     return res.status(204).send()
   } catch (err) { next(err) }
 }
+
+export async function reverse(req: Request, res: Response, next: NextFunction) {
+  try {
+    const propertyId = getRequestPropertyId(req)
+    const reversal = await service.reverseTransaction(propertyId, req.params.id as string, req.user?.id, req.body.reason)
+    return res.status(201).json({ success: true, data: { reversal: mapFinancialTransaction(reversal) } })
+  } catch (err) { next(err) }
+}

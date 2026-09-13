@@ -13,6 +13,7 @@ import financialAccountRoutes from '../modules/financial-account/financial-accou
 import financialCategoryRoutes from '../modules/financial-category/financial-category.route.js'
 import financialTransactionRoutes from '../modules/financial-transaction/financial-transaction.route.js'
 import auditRoutes from '../modules/audit/audit.route.js'
+import expenseRoutes from '../modules/expense/expense.route.js'
 
 const router = Router()
 
@@ -36,5 +37,6 @@ router.use('/finance/accounts', financialAccountRoutes)
 router.use('/finance/categories', financialCategoryRoutes)
 router.use('/finance/transactions', financialTransactionRoutes)
 router.use('/audit-log', auditRoutes)
+router.use('/expenses', expenseRoutes)
 
 export default router
