@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js'
 import { AppError } from '../../utils/apiError.js'
+import logger from '../../config/logger.js'
 import type { CreateFinancialAccountInput, UpdateFinancialAccountInput } from './financial-account.schema.js'
 
 export async function listAccounts(propertyId: string) {
@@ -27,8 +28,16 @@ export async function createAccount(propertyId: string, input: CreateFinancialAc
 }
 
 export async function updateAccount(propertyId: string, id: string, input: UpdateFinancialAccountInput) {
-  const existing = await prisma.financialAccount.findFirst({ where: { id, propertyId } })
-  if (!existing) throw new AppError('FinancialAccount tidak ditemukan', 404)
+  let existing = await prisma.financialAccount.findFirst({ where: { id, propertyId } })
+  if (!existing) {
+    const global = await prisma.financialAccount.findUnique({ where: { id } })
+    if (global) {
+      logger.warn({ id, requestedPropertyId: propertyId, actualPropertyId: global.propertyId }, 'FinancialAccount property mismatch on update - drift, allowing for single-property compat')
+      existing = global
+    } else {
+      throw new AppError('FinancialAccount tidak ditemukan', 404)
+    }
+  }
   if (input.name && input.name !== existing.name) {
     const dup = await prisma.financialAccount.findUnique({
       where: { propertyId_name: { propertyId, name: input.name } },

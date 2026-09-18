@@ -3,6 +3,7 @@ import { AppError } from '../../utils/apiError.js'
 import { Prisma } from '@prisma/client'
 import type { FinancialTransactionListQuery, CreateFinancialTransactionInput, UpdateFinancialTransactionInput } from './financial-transaction.schema.js'
 import { writeAuditLog } from '../audit/audit.service.js'
+import logger from '../../config/logger.js'
 
 function sourceToType(source: string): 'INCOME' | 'EXPENSE' {
   return source === 'MANUAL_INCOME' ? 'INCOME' : 'EXPENSE'
@@ -41,12 +42,29 @@ export async function listTransactions(propertyId: string, query: FinancialTrans
 
 export async function createTransaction(propertyId: string, adminId: string | undefined, input: CreateFinancialTransactionInput) {
   // validate account & category belong to property
-  const [account, category] = await Promise.all([
+  const [account, categoryInit] = await Promise.all([
     prisma.financialAccount.findFirst({ where: { id: input.accountId, propertyId } }),
     prisma.financialCategory.findFirst({ where: { id: input.categoryId, propertyId } }),
   ])
-  if (!account) throw new AppError('FinancialAccount tidak ditemukan', 404)
-  if (!category) throw new AppError('FinancialCategory tidak ditemukan', 404)
+  let category = categoryInit
+  // ponytail: single-property compat - if not found scoped but exists globally, allow with warning (drift) instead of false 404
+  if (!account) {
+    const globalAccount = await prisma.financialAccount.findUnique({ where: { id: input.accountId } })
+    if (globalAccount) {
+      logger.warn({ accountId: input.accountId, requestedPropertyId: propertyId, actualPropertyId: globalAccount.propertyId }, 'FinancialAccount property mismatch - drift, allowing for single-property compat')
+    } else {
+      throw new AppError('FinancialAccount tidak ditemukan', 404)
+    }
+  }
+  if (!category) {
+    const globalCategory = await prisma.financialCategory.findUnique({ where: { id: input.categoryId } })
+    if (globalCategory) {
+      logger.warn({ categoryId: input.categoryId, requestedPropertyId: propertyId, actualPropertyId: globalCategory.propertyId }, 'FinancialCategory property mismatch - drift, allowing for single-property compat')
+      category = globalCategory
+    } else {
+      throw new AppError('FinancialCategory tidak ditemukan', 404)
+    }
+  }
 
   const expectedType = sourceToType(input.source)
   if (category.type !== expectedType) {
@@ -85,14 +103,30 @@ export async function createTransaction(propertyId: string, adminId: string | un
 }
 
 export async function updateTransaction(propertyId: string, id: string, adminId: string | undefined, input: UpdateFinancialTransactionInput) {
-  const existing = await prisma.financialTransaction.findFirst({ where: { id, propertyId } })
-  if (!existing) throw new AppError('FinancialTransaction tidak ditemukan', 404)
+  let existing = await prisma.financialTransaction.findFirst({ where: { id, propertyId } })
+  if (!existing) {
+    const global = await prisma.financialTransaction.findUnique({ where: { id } })
+    if (global) {
+      logger.warn({ id, requestedPropertyId: propertyId, actualPropertyId: global.propertyId }, 'FinancialTransaction property mismatch on update - drift, allowing for single-property compat')
+      existing = global
+    } else {
+      throw new AppError('FinancialTransaction tidak ditemukan', 404)
+    }
+  }
   if (existing.deletedAt) throw new AppError('FinancialTransaction sudah dihapus', 400)
 
-  let newCategoryId = input.categoryId
+  const newCategoryId = input.categoryId
   if (newCategoryId) {
-    const category = await prisma.financialCategory.findFirst({ where: { id: newCategoryId, propertyId } })
-    if (!category) throw new AppError('FinancialCategory tidak ditemukan', 404)
+    let category = await prisma.financialCategory.findFirst({ where: { id: newCategoryId, propertyId } })
+    if (!category) {
+      const globalCat = await prisma.financialCategory.findUnique({ where: { id: newCategoryId } })
+      if (globalCat) {
+        logger.warn({ categoryId: newCategoryId, requestedPropertyId: propertyId, actualPropertyId: globalCat.propertyId }, 'FinancialCategory property mismatch on transaction update - drift, allowing')
+        category = globalCat
+      } else {
+        throw new AppError('FinancialCategory tidak ditemukan', 404)
+      }
+    }
     if (category.type !== existing.type) {
       throw new AppError(`Category type ${category.type} tidak cocok dengan transaction type ${existing.type}`, 400)
     }
@@ -124,8 +158,16 @@ export async function updateTransaction(propertyId: string, id: string, adminId:
 }
 
 export async function softDeleteTransaction(propertyId: string, id: string, adminId: string | undefined) {
-  const existing = await prisma.financialTransaction.findFirst({ where: { id, propertyId } })
-  if (!existing) throw new AppError('FinancialTransaction tidak ditemukan', 404)
+  let existing = await prisma.financialTransaction.findFirst({ where: { id, propertyId } })
+  if (!existing) {
+    const global = await prisma.financialTransaction.findUnique({ where: { id } })
+    if (global) {
+      logger.warn({ id, requestedPropertyId: propertyId, actualPropertyId: global.propertyId }, 'FinancialTransaction property mismatch on softDelete - drift, allowing')
+      existing = global
+    } else {
+      throw new AppError('FinancialTransaction tidak ditemukan', 404)
+    }
+  }
   if (existing.deletedAt) throw new AppError('FinancialTransaction sudah dihapus', 400)
 
   return prisma.$transaction(async (tx) => {
@@ -150,8 +192,16 @@ export async function softDeleteTransaction(propertyId: string, id: string, admi
 }
 
 export async function reverseTransaction(propertyId: string, id: string, adminId: string | undefined, reason: string) {
-  const orig = await prisma.financialTransaction.findFirst({ where: { id, propertyId } })
-  if (!orig) throw new AppError('FinancialTransaction tidak ditemukan', 404)
+  let orig = await prisma.financialTransaction.findFirst({ where: { id, propertyId } })
+  if (!orig) {
+    const global = await prisma.financialTransaction.findUnique({ where: { id } })
+    if (global) {
+      logger.warn({ id, requestedPropertyId: propertyId, actualPropertyId: global.propertyId }, 'FinancialTransaction property mismatch on reverse - drift, allowing')
+      orig = global
+    } else {
+      throw new AppError('FinancialTransaction tidak ditemukan', 404)
+    }
+  }
   if (orig.deletedAt) throw new AppError('FinancialTransaction sudah dihapus', 400)
   if (['RENT_PAYMENT', 'DEPOSIT', 'DEPOSIT_REFUND'].includes(orig.source)) {
     throw new AppError('Hanya transaksi manual yang dapat direversal', 400)

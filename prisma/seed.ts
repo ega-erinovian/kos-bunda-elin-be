@@ -7,11 +7,13 @@ import { seedFinanceCategories } from './seed-finance-categories.js'
 const prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL!) })
 
 async function main() {
+  // ponytail: respect DEFAULT_PROPERTY_ID env to avoid drift between seed and runtime (single-property)
+  const defaultPropertyId = process.env.DEFAULT_PROPERTY_ID || 'default-property'
   const property = await prisma.property.upsert({
-    where: { id: 'default-property' },
+    where: { id: defaultPropertyId },
     update: {},
     create: {
-      id: 'default-property',
+      id: defaultPropertyId,
       nama: 'Kos Putri Bunda Elin',
       alamat: 'Jl. Contoh No. 123, Kota Contoh',
     },

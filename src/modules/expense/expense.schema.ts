@@ -31,6 +31,8 @@ export const reverseExpenseSchema = z.object({
   reason: z.string().min(1).max(500),
 })
 
+export const idParamsSchema = z.object({ id: z.uuid() })
+
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>
 export type ListExpenseQuery = z.infer<typeof listExpenseQuerySchema>
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>

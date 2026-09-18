@@ -16,6 +16,8 @@ export const updateFinancialCategorySchema = z.object({
   active: z.boolean().optional(),
 })
 
+export const idParamsSchema = z.object({ id: z.uuid() })
+
 export type FinancialCategoryListQuery = z.infer<typeof financialCategoryListQuerySchema>
 export type CreateFinancialCategoryInput = z.infer<typeof createFinancialCategorySchema>
 export type UpdateFinancialCategoryInput = z.infer<typeof updateFinancialCategorySchema>

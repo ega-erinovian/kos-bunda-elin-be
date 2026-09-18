@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../../middlewares/auth.middleware.js'
 import { validate } from '../../middlewares/validate.middleware.js'
-import { createFinancialAccountSchema, updateFinancialAccountSchema } from './financial-account.schema.js'
+import { createFinancialAccountSchema, updateFinancialAccountSchema, idParamsSchema } from './financial-account.schema.js'
 import * as controller from './financial-account.controller.js'
 
 const router = Router()
@@ -9,6 +9,6 @@ router.use(requireAuth)
 
 router.get('/', controller.list)
 router.post('/', validate(createFinancialAccountSchema), controller.create)
-router.patch('/:id', validate(updateFinancialAccountSchema), controller.update)
+router.patch('/:id', validate(idParamsSchema, 'params'), validate(updateFinancialAccountSchema), controller.update)
 
 export default router
