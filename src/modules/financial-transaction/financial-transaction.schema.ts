@@ -26,6 +26,8 @@ export const updateFinancialTransactionSchema = z.object({
   categoryId: z.string().uuid().optional(),
 })
 
+export const idParamsSchema = z.object({ id: z.uuid() })
+
 export type FinancialTransactionListQuery = z.infer<typeof financialTransactionListQuerySchema>
 export type CreateFinancialTransactionInput = z.infer<typeof createFinancialTransactionSchema>
 export type UpdateFinancialTransactionInput = z.infer<typeof updateFinancialTransactionSchema>

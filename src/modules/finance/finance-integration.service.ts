@@ -1,5 +1,6 @@
 import { AppError } from '../../utils/apiError.js'
 import { Prisma } from '@prisma/client'
+import logger from '../../config/logger.js'
 
 /**
  * Creates the linked FinancialTransaction for a rent PaymentRecord.
@@ -20,7 +21,14 @@ export async function createTransactionForPayment(
     account = await (tx as any).financialAccount.findFirst({
       where: { id: accountId, propertyId: params.propertyId },
     })
-    if (!account) throw new AppError('FinancialAccount tidak ditemukan', 404)
+    if (!account) {
+      const globalAcc = await (tx as any).financialAccount.findUnique({ where: { id: accountId } })
+      if (globalAcc) {
+        logger.warn({ accountId, requestedPropertyId: params.propertyId, actualPropertyId: globalAcc.propertyId }, 'FinancialAccount property mismatch on finance-integration - drift, allowing')
+      } else {
+        throw new AppError('FinancialAccount tidak ditemukan', 404)
+      }
+    }
   } else {
     account = await (tx as any).financialAccount.findFirst({
       where: { propertyId: params.propertyId, type: 'CASH', active: true },

@@ -4,14 +4,32 @@ import { Prisma } from '@prisma/client'
 import type { CreateExpenseInput, ListExpenseQuery, UpdateExpenseInput } from './expense.schema.js'
 import { writeAuditLog } from '../audit/audit.service.js'
 import { reverseTransaction } from '../financial-transaction/financial-transaction.service.js'
+import logger from '../../config/logger.js'
 
 export async function createExpense(propertyId: string, adminId: string | undefined, input: CreateExpenseInput) {
-  const [account, category] = await Promise.all([
+  const [account, categoryInit] = await Promise.all([
     prisma.financialAccount.findFirst({ where: { id: input.accountId, propertyId } }),
     prisma.financialCategory.findFirst({ where: { id: input.categoryId, propertyId } }),
   ])
-  if (!account) throw new AppError('FinancialAccount tidak ditemukan', 404)
-  if (!category) throw new AppError('FinancialCategory tidak ditemukan', 404)
+  let category = categoryInit
+  // ponytail: single-property compat - same drift fallback as financial-transaction.service.ts
+  if (!account) {
+    const globalAccount = await prisma.financialAccount.findUnique({ where: { id: input.accountId } })
+    if (globalAccount) {
+      logger.warn({ accountId: input.accountId, requestedPropertyId: propertyId, actualPropertyId: globalAccount.propertyId }, 'FinancialAccount property mismatch - drift, allowing for single-property compat')
+    } else {
+      throw new AppError('FinancialAccount tidak ditemukan', 404)
+    }
+  }
+  if (!category) {
+    const globalCategory = await prisma.financialCategory.findUnique({ where: { id: input.categoryId } })
+    if (globalCategory) {
+      logger.warn({ categoryId: input.categoryId, requestedPropertyId: propertyId, actualPropertyId: globalCategory.propertyId }, 'FinancialCategory property mismatch - drift, allowing for single-property compat')
+      category = globalCategory
+    } else {
+      throw new AppError('FinancialCategory tidak ditemukan', 404)
+    }
+  }
   if (category.type !== 'EXPENSE') {
     throw new AppError(`Category type ${category.type} tidak cocok untuk expense (harus EXPENSE)`, 400)
   }
@@ -78,8 +96,18 @@ export async function listExpenses(propertyId: string, query: ListExpenseQuery) 
 }
 
 export async function updateExpense(propertyId: string, id: string, adminId: string | undefined, input: UpdateExpenseInput) {
-  const existing = await prisma.financialTransaction.findFirst({ where: { id, propertyId, type: 'EXPENSE' } })
-  if (!existing) throw new AppError('FinancialTransaction tidak ditemukan', 404)
+  let existing = await prisma.financialTransaction.findFirst({ where: { id, propertyId, type: 'EXPENSE' } })
+  if (!existing) {
+    const global = await prisma.financialTransaction.findUnique({ where: { id } })
+    if (global && global.type === 'EXPENSE') {
+      logger.warn({ id, requestedPropertyId: propertyId, actualPropertyId: global.propertyId }, 'FinancialTransaction property mismatch on updateExpense - drift, allowing')
+      existing = global
+    } else if (global) {
+      throw new AppError('FinancialTransaction tidak ditemukan', 404)
+    } else {
+      throw new AppError('FinancialTransaction tidak ditemukan', 404)
+    }
+  }
   if (existing.deletedAt) throw new AppError('FinancialTransaction sudah dihapus', 400)
 
   return prisma.$transaction(async (tx) => {
@@ -109,7 +137,14 @@ export async function updateExpense(propertyId: string, id: string, adminId: str
 
 export async function reverseExpense(propertyId: string, id: string, adminId: string | undefined, reason: string) {
   const existing = await prisma.financialTransaction.findFirst({ where: { id, propertyId, type: 'EXPENSE' } })
-  if (!existing) throw new AppError('FinancialTransaction tidak ditemukan', 404)
+  if (!existing) {
+    const global = await prisma.financialTransaction.findUnique({ where: { id } })
+    if (global && global.type === 'EXPENSE') {
+      logger.warn({ id, requestedPropertyId: propertyId, actualPropertyId: global.propertyId }, 'FinancialTransaction property mismatch on reverseExpense - drift, allowing')
+    } else {
+      throw new AppError('FinancialTransaction tidak ditemukan', 404)
+    }
+  }
 
   const reversal = await reverseTransaction(propertyId, id, adminId, reason)
   return reversal

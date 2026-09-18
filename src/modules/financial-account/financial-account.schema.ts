@@ -17,5 +17,7 @@ export const updateFinancialAccountSchema = z.object({
   active: z.boolean().optional(),
 })
 
+export const idParamsSchema = z.object({ id: z.uuid() })
+
 export type CreateFinancialAccountInput = z.infer<typeof createFinancialAccountSchema>
 export type UpdateFinancialAccountInput = z.infer<typeof updateFinancialAccountSchema>

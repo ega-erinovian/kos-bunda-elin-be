@@ -14,6 +14,7 @@ import { Decimal } from 'decimal.js'
 import crypto from 'crypto'
 import { writeAuditLog } from '../audit/audit.service.js'
 import { createTransactionForPayment } from '../finance/finance-integration.service.js'
+import logger from '../../config/logger.js'
 
 async function findPembayaranById(id: string, includePaymentRecords = false) {
   return prisma.pembayaran.findFirst({
@@ -292,7 +293,14 @@ export async function addPaymentRecord(
       const accountCheck = await (tx as any).financialAccount.findFirst({
         where: { id: input.financialAccountId, propertyId },
       })
-      if (!accountCheck) throw new AppError('FinancialAccount tidak ditemukan', 404)
+      if (!accountCheck) {
+        const globalCheck = await (tx as any).financialAccount.findUnique({ where: { id: input.financialAccountId } })
+        if (globalCheck) {
+          logger.warn({ accountId: input.financialAccountId, requestedPropertyId: propertyId, actualPropertyId: globalCheck.propertyId }, 'FinancialAccount property mismatch on pembayaran - drift, allowing')
+        } else {
+          throw new AppError('FinancialAccount tidak ditemukan', 404)
+        }
+      }
     }
 
     const paymentRecord = await tx.paymentRecord.create({
