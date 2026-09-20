@@ -18,12 +18,12 @@
 | Notifications — Templates & Reminder Config (§2.2) | 5 | 0 | 5 |
 | Notifications — Log / Send / Sweep / Webhook (§2.3) | 6 | 0 | 6 |
 | Finance Ledger — Accounts/Categories/Transactions/Audit (§2.4) | 11 | 0 | 11 |
-| Expenses & Reversal (§2.5) | 0 | 5 | 5 |
-| Receivables & Aging (§2.6) | 0 | 3 | 3 |
+| Expenses & Reversal (§2.5) | 5 | 0 | 5 |
+| Receivables & Aging (§2.6) | 3 | 0 | 3 |
 | Tenant Deposits (§2.7) | 0 | 4 | 4 |
 | Financial Reports (§2.8) | 0 | 8 | 8 |
 | Dashboard Expansion (§2.9) | 0 | 1 | 1 |
-| **Total frozen endpoints** | **28** | **21** | **49** |
+| **Total frozen endpoints** | **36** | **13** | **49** |
 
 > Counts include `GET/POST` webhook as 2 rows. Infra phases (7/18–21) have no user-facing endpoints.
 
@@ -85,19 +85,19 @@
 
 | ID | Feature | Endpoint | Method | Auth | Status | Implementation | Contract | Notes |
 |---|---|---|---|---|---|---|---|---|
-| F-EXP-01 | Create expense | `/api/expenses` | POST | `requireAuth` | ⬜ | `src/modules/expense/expense.route.ts` (missing) — thin view over `financial-transaction.service.ts type=EXPENSE` | `PLAN.md §2.5:297` | `category.type=EXPENSE`, requires `vendorName`, `receiptUrl?` must be URL |
-| F-EXP-02 | List expenses | `/api/expenses?categoryId=&accountId=&from=&to=&vendorName=` | GET | `requireAuth` | ⬜ | `src/modules/expense/*` | `PLAN.md §2.5:301` | Filtered `FinancialTransaction` list |
-| F-EXP-03 | Patch expense | `/api/expenses/:id` | PATCH | `requireAuth` | ⬜ | `src/modules/expense/*` | `PLAN.md §2.5:302` | Only `vendorName/receiptUrl/description` |
-| F-EXP-04 | Reverse expense | `/api/expenses/:id/reverse` | POST | `OWNER` | ⬜ | `financial-transaction.service.ts:reverseTransaction` (missing) + `AuditLog EXPENSE_REVERSED` | `PLAN.md §2.5:305` | Body `{ reason }` → `201 { reversal: FinancialTransaction }`; inserts offsetting `ADJUSTMENT` row, never mutates amount |
-| F-EXP-05 | Reverse any transaction | `/api/finance/transactions/:id/reverse` | POST | `OWNER` | ⬜ | same reversal path | `PLAN.md §2.5:308` | Same semantics as F-EXP-04 for manual income/expense |
+| F-EXP-01 | Create expense | `/api/expenses` | POST | `requireAuth` | ✅ | `src/modules/expense/expense.route.ts:12` + `expense.service.ts:9` (`createExpense` `type=EXPENSE` + `writeAuditLog EXPENSE_CREATED`) | `PLAN.md §2.5:297` | `category.type=EXPENSE`, requires `vendorName`, `receiptUrl?` must be URL |
+| F-EXP-02 | List expenses | `/api/expenses?categoryId=&accountId=&from=&to=&vendorName=` | GET | `requireAuth` | ✅ | `src/modules/expense/expense.route.ts:13` + `expense.service.ts:68` (`listExpenses` filtered, `vendorName` `contains` `insensitive`) | `PLAN.md §2.5:301` | Filtered `FinancialTransaction` list; `pagination { page,pageSize,total,totalPages }` |
+| F-EXP-03 | Patch expense | `/api/expenses/:id` | PATCH | `requireAuth` | ✅ | `src/modules/expense/expense.route.ts:14` + `expense.service.ts:98` (`updateExpense` `vendorName`/`receiptUrl`/`description` only) | `PLAN.md §2.5:302` | Only `vendorName/receiptUrl/description`; amount via reversal |
+| F-EXP-04 | Reverse expense | `/api/expenses/:id/reverse` | POST | `OWNER` | ✅ | `src/modules/expense/expense.route.ts:15` + `expense.service.ts:138` (`reverseExpense` → `reverseTransaction`) + `financial-transaction.service.ts` (`ADJUSTMENT`) | `PLAN.md §2.5:305` | Body `{ reason }` → `201 { reversal: FinancialTransaction }`; inserts offsetting `ADJUSTMENT` row, never mutates amount |
+| F-EXP-05 | Reverse any transaction | `/api/finance/transactions/:id/reverse` | POST | `OWNER` | ✅ | `src/modules/financial-transaction/financial-transaction.route.ts` + `financial-transaction.service.ts:reverseTransaction` | `PLAN.md §2.5:308` | Same semantics as F-EXP-04 for manual income/expense |
 
 ## 6) Receivables & Aging — Phase 14
 
 | ID | Feature | Endpoint | Method | Auth | Status | Implementation | Contract | Notes |
 |---|---|---|---|---|---|---|---|---|
-| F-RCV-01 | List receivables by tenant | `/api/receivables` | GET | `requireAuth` | ⬜ | `src/modules/receivable/receivable.service.ts` (missing) — computed from `Pembayaran` | `PLAN.md §2.6:316` | `outstanding = nominal - totalDibayar` per non-`LUNAS`; `ReceivableByTenant { penyewaId,nama,outstanding,unpaidPeriods }` |
-| F-RCV-02 | Receivables summary | `/api/receivables/summary` | GET | `requireAuth` | ⬜ | `receivable.service.ts` | `PLAN.md §2.6:317` | `ReceivableSummary { totalOutstanding,unpaidPeriodCount,propertyTotal }` |
-| F-RCV-03 | Aging buckets | `/api/receivables/aging` | GET | `requireAuth` | ⬜ | `src/utils/aging.util.ts` (missing) | `PLAN.md §2.6:318` + `§1 item 3` | Labels exactly `"current"\|"1-30"\|"31-60"\|"61-90"\|"90+"` (not prose) |
+| F-RCV-01 | List receivables by tenant | `/api/receivables` | GET | `requireAuth` | ✅ | `src/modules/receivable/receivable.route.ts:11` + `receivable.service.ts:12` (`getReceivables` grouped by `penyewaId`, `outstanding = nominal - totalDibayar`, sorted `outstanding desc`) + `receivable.controller.ts:9` | `PLAN.md §2.6:316` | `outstanding = nominal - totalDibayar` per non-`LUNAS`; `ReceivableByTenant { penyewaId,nama,outstanding,unpaidPeriods }`; `Decimal→number` via `toNumberRequired`; `?asOf` additive |
+| F-RCV-02 | Receivables summary | `/api/receivables/summary` | GET | `requireAuth` | ✅ | `src/modules/receivable/receivable.route.ts:10` + `receivable.service.ts:33` (`getSummary` `totalOutstanding`/`unpaidPeriodCount`/`propertyTotal` alias) | `PLAN.md §2.6:317` | `ReceivableSummary { totalOutstanding,unpaidPeriodCount,propertyTotal }`; `propertyTotal` = `totalOutstanding` per §2.6 reconciliation; `{ success:true, data }` envelope |
+| F-RCV-03 | Aging buckets | `/api/receivables/aging` | GET | `requireAuth` | ✅ | `src/utils/aging.util.ts:1` (`daysPastDue`/`bucketLabel`/`bucketAging` — 5 buckets) + `src/modules/receivable/receivable.service.ts:43` (`getAging`) + `receivable.route.ts:11` | `PLAN.md §2.6:318` + `§1 item 3` | Labels exactly `"current"\|"1-30"\|"31-60"\|"61-90"\|"90+"` (not prose); always 5 buckets; `outstanding`/`count` per bucket; `?asOf` controls bucketing |
 
 ## 7) Tenant Deposits — Phase 15
 
@@ -133,7 +133,7 @@
 
 ## 10) How to use
 
-- **Before coding:** pick next `⬜` in `PROGRESS.md §1` (Phase 12 is next). Implement exactly the row's `Contract` cell.
+- **Before coding:** pick next `⬜` in `PROGRESS.md §1` (Phase 15 is next). Implement exactly the row's `Contract` cell.
 - **After coding:** flip `Status` to `✅`/`🟡`, fill `Implementation` file:line, add the PR to `PROGRESS.md §1 Notes`, and tick `PLAN.md §3` acceptance criteria.
 - **Shape guard:** every monetary `Decimal→number` (`serialize.util.ts:12`), `AgingBucket.label` literal set, `Pagination` shape (`page/pageSize/total/totalPages`) — contract suite in `PROGRESS.md §1 Phase 18` will fail otherwise.
 
