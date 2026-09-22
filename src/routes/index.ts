@@ -16,6 +16,7 @@ import auditRoutes from '../modules/audit/audit.route.js'
 import expenseRoutes from '../modules/expense/expense.route.js'
 import receivableRoutes from '../modules/receivable/receivable.route.js'
 import depositRoutes from '../modules/deposit/deposit.route.js'
+import financeReportRoutes from '../modules/finance-report/finance-report.route.js'
 
 const router = Router()
 
@@ -42,5 +43,6 @@ router.use('/audit-log', auditRoutes)
 router.use('/expenses', expenseRoutes)
 router.use('/receivables', receivableRoutes)
 router.use('/deposits', depositRoutes)
+router.use('/reports', financeReportRoutes)
 
 export default router
