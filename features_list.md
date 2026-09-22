@@ -21,9 +21,9 @@
 | Expenses & Reversal (§2.5) | 5 | 0 | 5 |
 | Receivables & Aging (§2.6) | 3 | 0 | 3 |
 | Tenant Deposits (§2.7) | 4 | 0 | 4 |
-| Financial Reports (§2.8) | 0 | 8 | 8 |
+| Financial Reports (§2.8) | 8 | 0 | 8 |
 | Dashboard Expansion (§2.9) | 0 | 1 | 1 |
-| **Total frozen endpoints** | **40** | **9** | **49** |
+| **Total frozen endpoints** | **48** | **1** | **49** |
 
 > Counts include `GET/POST` webhook as 2 rows. Infra phases (7/18–21) have no user-facing endpoints.
 
@@ -114,16 +114,16 @@
 
 | ID | Feature | Endpoint | Method | Auth | Status | Implementation | Contract | Notes |
 |---|---|---|---|---|---|---|---|---|
-| F-RPT-01 | Dashboard report | `/api/reports/dashboard?from=&to=` | GET | `requireAuth` | ⬜ | `src/modules/finance-report/finance-report.service.ts` (missing) | `PLAN.md §2.8:361` | `DashboardReport { revenue, expenses, cashFlow, occupancyRate, overdueRent?, revenueTrend? }` |
-| F-RPT-02 | Transaction report | `/api/reports/transactions?from=&to=&type=&categoryId=` | GET | `requireAuth` | ⬜ | `finance-report.service.ts` | `PLAN.md §2.8:362` | Raw filtered transactions for table export |
-| F-RPT-03 | Revenue report | `/api/reports/revenue?from=&to=` | GET | `requireAuth` | ⬜ | `finance-report.service.ts` | `PLAN.md §2.8:363` | `RevenueReport { billedRevenue,cashRevenue,expectedRevenue,collectionRate,otherIncome? }` — billed vs cash distinct |
-| F-RPT-04 | Expense report | `/api/reports/expenses?from=&to=` | GET | `requireAuth` | ⬜ | `finance-report.service.ts` | `PLAN.md §2.8:364` | `ExpenseReport { totalExpenses, byCategory, trend? }` |
-| F-RPT-05 | Cash-flow report | `/api/reports/cash-flow?from=&to=` | GET | `requireAuth` | ⬜ | `finance-report.service.ts` | `PLAN.md §2.8:365` | `CashFlowReport { inflow,outflow,net }` — includes deposits |
-| F-RPT-06 | Income-statement report | `/api/reports/income-statement?from=&to=` | GET | `requireAuth` | ⬜ | `finance-report.service.ts` | `PLAN.md §2.8:366` | `IncomeStatementReport { totalIncome,totalExpenses,netOperatingIncome }` — excludes deposits |
-| F-RPT-07 | Receivables report (alias) | `/api/reports/receivables` | GET | `requireAuth` | ⬜ | thin alias over `receivable.service.ts` | `PLAN.md §2.8:367` | Same as F-RCV-01 |
-| F-RPT-08 | Aging report (alias) | `/api/reports/receivables/aging` | GET | `requireAuth` | ⬜ | thin alias over `receivable.service.ts` | `PLAN.md §2.8:368` | Same as F-RCV-03 |
+| F-RPT-01 | Dashboard report | `/api/reports/dashboard?from=&to=` | GET | `requireAuth` | ✅ | `src/modules/finance-report/finance-report.route.ts:11` + `finance-report.controller.ts:7` (`dashboard`) + `finance-report.service.ts:340` (`getDashboardReport`+`getRevenueTrend` UTC month `yyyy-MM` + `overdueRent` point-in-time + `occupancyRate` TERISI/active) + `src/routes/index.ts:44` | `PLAN.md §2.8:361` | `DashboardReport { revenue, expenses, cashFlow, occupancyRate, overdueRent, revenueTrend }` — old `overdueRent?`/`revenueTrend?` now always present (additive per `§1 item 1` still compatible); `from/to` optional defaults `startOfMonth(now)`→`now`, `MAX 1095d` 400, `getRequestPropertyId` isolated, UTC bucketing fixes `Asia/Jakarta` TZ drift |
+| F-RPT-02 | Transaction report | `/api/reports/transactions?from=&to=&type=&categoryId=` | GET | `requireAuth` | ✅ | `finance-report.route.ts:11` (`transactions`) + `finance-report.service.ts:238` (`getTransactionsReport` `deletedAt=null` + `type`/`categoryId` filters + `transactionDate desc`) + `financial-transaction.mapper.ts` (`Decimal→number`) + `finance-report.schema.ts:11` | `PLAN.md §2.8:362` | Raw filtered transactions for table export; plain `{ data: FinancialTransaction[] }` no pagination as §2.8 wired (`supertest` verified); `type` and `categoryId` optional filters |
+| F-RPT-03 | Revenue report | `/api/reports/revenue?from=&to=` | GET | `requireAuth` | ✅ | `finance-report.service.ts:74` (`getRevenueReport` billed=`Pembayaran.nominal` by `tanggalJatuhTempo`, cash=`PaymentRecord.amountPaid` by `paymentDate`, `otherIncome` excl `RENT_PAYMENT/DEPOSIT`, `collectionRate`=`cash/billed`, `expected`=billed) + `finance-report.schema.ts:3` + `controller:22` | `PLAN.md §2.8:363` | `RevenueReport { billedRevenue,cashRevenue,expectedRevenue,collectionRate,otherIncome }` — `otherIncome` always present (optional additive now concrete); `Decimal→number` via `Decimal.js`; verified `3M/2M/400k/0.666` hand-computed fixture + deposit excluded check |
+| F-RPT-04 | Expense report | `/api/reports/expenses?from=&to=` | GET | `requireAuth` | ✅ | `finance-report.service.ts:126` (`getExpenseReport` `total` excl `DEPOSIT_REFUND` + `byCategory` groupBy `categoryId` `amount desc` + `trend` UTC month `amount`) + `schema/controller` | `PLAN.md §2.8:364` | `ExpenseReport { totalExpenses, byCategory: {categoryId,amount}[], trend: {month,amount}[] }` — `trend` always present (monthsBetween UTC `yyyy-MM` with 0-fill); verified `500k` excl refund + `byCategory` sum + trend `2026-01/02` |
+| F-RPT-05 | Cash-flow report | `/api/reports/cash-flow?from=&to=` | GET | `requireAuth` | ✅ | `finance-report.service.ts:182` (`getCashFlowReport` inflow all `INCOME` incl `DEPOSIT/RENT_PAYMENT`, outflow all `EXPENSE` incl `DEPOSIT_REFUND`, `net=inflow-outflow`) | `PLAN.md §2.8:365` | `CashFlowReport { inflow,outflow,net }` — includes deposits (unlike revenue/expense), verified `3.4M/700k/2.7M` incl deposit/refund, `net` diverges from `netOperatingIncome` |
+| F-RPT-06 | Income-statement report | `/api/reports/income-statement?from=&to=` | GET | `requireAuth` | ✅ | `finance-report.service.ts:216` (`getIncomeStatementReport` reuses `getRevenueReport`+`getExpenseReport`, `totalIncome=cash+other`, `NIO=income-expenses`) | `PLAN.md §2.8:366` | `IncomeStatementReport { totalIncome,totalExpenses,netOperatingIncome }` — excludes deposits from both sides, verified `2.4M/500k/1.9M` and `NIO≠netCash` divergence |
+| F-RPT-07 | Receivables report (alias) | `/api/reports/receivables` | GET | `requireAuth` | ✅ | `finance-report.route.ts:11` + `controller:37` (`receivables` thin alias) + `receivable.service.ts:39` (`getReceivables` via `penyewa.kamar.propertyId`, `receivable.schema.ts:4` `asOf` guard) | `PLAN.md §2.8:367` | Same as F-RCV-01; thin wrapper, `getRequestPropertyId` + `resolveAsOf`, cross-checked alias vs `/api/receivables` equal `data.length` |
+| F-RPT-08 | Aging report (alias) | `/api/reports/receivables/aging` | GET | `requireAuth` | ✅ | `finance-report.route.ts:11` + `controller:48` (`receivablesAging`) + `receivable.service.ts:77` (`getAging`+`bucketAging` `current`/`1-30`/…) + `receivable.schema.ts` | `PLAN.md §2.8:368` | Same as F-RCV-03; 5 buckets `current`/`1-30`/`31-60`/`61-90`/`90+`, validated alias vs direct buckets length 5 |
 
-**Definitions:** `billed` = `Pembayaran.nominal` by `tanggalJatuhTempo`; `cash` = `PaymentRecord.amountPaid` / `FinancialTransaction.amount`; deposits excluded from revenue but included in cash flow (`PLAN.md §3 Phase 16 metric table`).
+**Definitions:** `billed` = `Pembayaran.nominal` by `tanggalJatuhTempo`; `cash` = `PaymentRecord.amountPaid` by `paymentDate` (canonical per metric table, `FinancialTransaction RENT_PAYMENT` 1:1 and not double-counted: `otherIncome` excl `RENT_PAYMENT`, `totalIncome=cash+other`); deposits excluded from revenue (`otherIncome` excl `DEPOSIT`, `totalExpenses` excl `DEPOSIT_REFUND`) but included in cash flow (`inflow` all `INCOME` incl `DEPOSIT`, `outflow` all `EXPENSE` incl `DEPOSIT_REFUND`) per `PLAN.md §3 Phase 16 metric table` — verified divergence (`NIO 1.9M` vs `net 2.7M`).
 
 ## 9) Dashboard Expansion — Phase 17
 
@@ -133,9 +133,9 @@
 
 ## 10) How to use
 
-- **Before coding:** pick next `⬜` in `PROGRESS.md §1` (Phase 15 is next). Implement exactly the row's `Contract` cell.
+- **Before coding:** pick next `⬜` in `PROGRESS.md §1` (Phase 17 is next). Implement exactly the row's `Contract` cell.
 - **After coding:** flip `Status` to `✅`/`🟡`, fill `Implementation` file:line, add the PR to `PROGRESS.md §1 Notes`, and tick `PLAN.md §3` acceptance criteria.
-- **Shape guard:** every monetary `Decimal→number` (`serialize.util.ts:12`), `AgingBucket.label` literal set, `Pagination` shape (`page/pageSize/total/totalPages`) — contract suite in `PROGRESS.md §1 Phase 18` will fail otherwise.
+- **Shape guard:** every monetary `Decimal→number` (`serialize.util.ts:12` + `Decimal.js` sums in `finance-report.service.ts`), `AgingBucket.label` literal set, `Pagination` shape (`page/pageSize/total/totalPages`), report `RevenueReport`/`ExpenseReport`/`CashFlowReport` shapes — contract suite in `PROGRESS.md §1 Phase 18` will fail otherwise.
 
 ## 11) Source-of-truth chain
 
