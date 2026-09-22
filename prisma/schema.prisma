@@ -86,6 +86,13 @@ enum TransactionSource {
   REFUND
 }
 
+enum DepositStatus {
+  HELD
+  PARTIALLY_REFUNDED
+  REFUNDED
+  FORFEITED
+}
+
 model Property {
   id        String   @id @default(uuid())
   nama      String
@@ -101,6 +108,7 @@ model Property {
   financialAccounts     FinancialAccount[]
   financialCategories   FinancialCategory[]
   financialTransactions FinancialTransaction[]
+  deposits              Deposit[]
   auditLogs             AuditLog[]
 }
 
@@ -160,6 +168,7 @@ model Penyewa {
   pushSubscriptions     PushSubscription[]
   notificationLogs      NotificationLog[]
   financialTransactions FinancialTransaction[]
+  deposits              Deposit[]
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }
@@ -311,7 +320,8 @@ model FinancialTransaction {
   pembayaran       Pembayaran?        @relation(fields: [pembayaranId], references: [id])
   paymentRecordId  String?            @unique
   paymentRecord    PaymentRecord?     @relation(fields: [paymentRecordId], references: [id])
-  depositId        String?            // plain String, FK added in Phase 15 when Deposit exists
+  depositId        String?
+  deposit          Deposit?           @relation(fields: [depositId], references: [id])
   type             TransactionType
   source           TransactionSource
   amount           Decimal            @db.Decimal(14, 2)
@@ -328,6 +338,28 @@ model FinancialTransaction {
 
   @@index([propertyId, transactionDate])
   @@index([propertyId, type, categoryId])
+}
+
+model Deposit {
+  id              String        @id @default(uuid())
+  propertyId      String
+  property        Property      @relation(fields: [propertyId], references: [id])
+  penyewaId       String
+  penyewa         Penyewa       @relation(fields: [penyewaId], references: [id])
+  amountReceived  Decimal       @db.Decimal(14, 2)
+  receivedDate    DateTime
+  deductionAmount Decimal       @default(0) @db.Decimal(14, 2)
+  deductionReason String?
+  refundAmount    Decimal?      @db.Decimal(14, 2)
+  refundDate      DateTime?
+  status          DepositStatus @default(HELD)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  transactions FinancialTransaction[]
+
+  @@index([propertyId, penyewaId])
+  @@index([propertyId, status])
 }
 
 model AuditLog {

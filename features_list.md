@@ -20,10 +20,10 @@
 | Finance Ledger — Accounts/Categories/Transactions/Audit (§2.4) | 11 | 0 | 11 |
 | Expenses & Reversal (§2.5) | 5 | 0 | 5 |
 | Receivables & Aging (§2.6) | 3 | 0 | 3 |
-| Tenant Deposits (§2.7) | 0 | 4 | 4 |
+| Tenant Deposits (§2.7) | 4 | 0 | 4 |
 | Financial Reports (§2.8) | 0 | 8 | 8 |
 | Dashboard Expansion (§2.9) | 0 | 1 | 1 |
-| **Total frozen endpoints** | **36** | **13** | **49** |
+| **Total frozen endpoints** | **40** | **9** | **49** |
 
 > Counts include `GET/POST` webhook as 2 rows. Infra phases (7/18–21) have no user-facing endpoints.
 
@@ -103,12 +103,12 @@
 
 | ID | Feature | Endpoint | Method | Auth | Status | Implementation | Contract | Notes |
 |---|---|---|---|---|---|---|---|---|
-| F-DEP-01 | Receive deposit | `/api/deposits` | POST | `requireAuth` | ⬜ | `src/modules/deposit/deposit.service.ts` (missing) + `Deposit` model (missing) | `PLAN.md §2.7:337` | Body `{ penyewaId, amountReceived, receivedDate }` → `201 Deposit`; also creates `FinancialTransaction source=DEPOSIT` in same `$transaction` |
-| F-DEP-02 | List deposits | `/api/deposits?penyewaId=&status=` | GET | `requireAuth` | ⬜ | `deposit.service.ts` | `PLAN.md §2.7:340` | `status=HELD\|PARTIALLY_REFUNDED\|REFUNDED\|FORFEITED` |
-| F-DEP-03 | Deduct from deposit | `/api/deposits/:id/deduct` | PATCH | `requireAuth` | ⬜ | `deposit.service.ts` | `PLAN.md §2.7:341` | Body `{ deductionAmount, deductionReason }` |
-| F-DEP-04 | Refund deposit | `/api/deposits/:id/refund` | POST | `requireAuth` | ⬜ | `deposit.service.ts` | `PLAN.md §2.7:344` | Body `{ refundAmount, refundDate }`; invariant `deduction+refund ≤ amountReceived`; creates `DEPOSIT_REFUND` transaction; `FORFEITED` → `ADJUSTMENT` income |
+| F-DEP-01 | Receive deposit | `/api/deposits` | POST | `requireAuth` | ✅ | `src/modules/deposit/deposit.route.ts:11` + `deposit.service.ts:33` (`receiveDeposit` via `penyewa.kamar.propertyId`, `DEPOSIT` category + Cash fallback, `$transaction` + `writeAuditLog DEPOSIT_RECEIVED`, `deposit.mapper.ts:1`) + `prisma/migrations/20260920055611_tenant_deposits/migration.sql` | `PLAN.md §2.7:337` | Body `{ penyewaId, amountReceived, receivedDate }` → `201 Deposit`; creates `FinancialTransaction source=DEPOSIT type=INCOME` in same `$transaction`; `Decimal→number` via `toNumberRequired` |
+| F-DEP-02 | List deposits | `/api/deposits?penyewaId=&status=` | GET | `requireAuth` | ✅ | `deposit.route.ts:11` + `deposit.service.ts:78` (`listDeposits` where `propertyId` + optional `penyewaId`/`status`, ordered `receivedDate desc`) + `deposit.mapper.ts:1` | `PLAN.md §2.7:340` | `status=HELD\|PARTIALLY_REFUNDED\|REFUNDED\|FORFEITED`; no pagination (frozen contract); `FORFEITED` enum-only, renderable |
+| F-DEP-03 | Deduct from deposit | `/api/deposits/:id/deduct` | PATCH | `requireAuth` | ✅ | `deposit.route.ts:11` + `deposit.service.ts:89` (`deductDeposit` replace `deductionAmount`/`deductionReason`, invariant `deduction+refund ≤ amountReceived` 400, status stays `HELD`, `writeAuditLog DEPOSIT_DEDUCTED`; no ledger row) | `PLAN.md §2.7:341` | Body `{ deductionAmount, deductionReason }` → `200 Deposit`; repeat replaces; 400 if `REFUNDED`/`FORFEITED` |
+| F-DEP-04 | Refund deposit | `/api/deposits/:id/refund` | POST | `requireAuth` | ✅ | `deposit.route.ts:11` + `deposit.service.ts:131` (`refundDeposit` `$transaction` Cash fallback + auto-create `DEPOSIT_REFUND` EXPENSE, `refundDate` ≥ `receivedDate` 400, invariant 400, 409 if already `REFUNDED`/`FORFEITED`, status `PARTIALLY_REFUNDED`→`REFUNDED` when `deduction+refund ≥ amountReceived`, `writeAuditLog DEPOSIT_REFUNDED`) | `PLAN.md §2.7:344` | Body `{ refundAmount, refundDate }` → `200 Deposit`; creates `FinancialTransaction source=DEPOSIT_REFUND type=EXPENSE`; `FORFEITED` no endpoint (enum-only per FE sync) |
 
-**Model (todo):** `DepositStatus HELD|PARTIALLY_REFUNDED|REFUNDED|FORFEITED` + `Deposit { propertyId, penyewaId, amountReceived, receivedDate, deductionAmount, deductionReason?, refundAmount?, refundDate?, status }` (`PLAN.md §5.1 Phase 15`).
+**Model:** `DepositStatus HELD|PARTIALLY_REFUNDED|REFUNDED|FORFEITED` + `Deposit { propertyId, penyewaId, amountReceived, receivedDate, deductionAmount, deductionReason?, refundAmount?, refundDate?, status }` (`schema.prisma:89`, `300`, `314`, `333`); `@@index([propertyId,penyewaId])`, `@@index([propertyId,status])`; `FinancialTransaction.depositId` FK (`migration.sql:29`).
 
 ## 8) Financial Reports — Phase 16
 
