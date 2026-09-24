@@ -22,8 +22,8 @@
 | Receivables & Aging (§2.6) | 3 | 0 | 3 |
 | Tenant Deposits (§2.7) | 4 | 0 | 4 |
 | Financial Reports (§2.8) | 8 | 0 | 8 |
-| Dashboard Expansion (§2.9) | 0 | 1 | 1 |
-| **Total frozen endpoints** | **48** | **1** | **49** |
+| Dashboard Expansion (§2.9) | 1 | 0 | 1 |
+| **Total frozen endpoints** | **49** | **0** | **49** |
 
 > Counts include `GET/POST` webhook as 2 rows. Infra phases (7/18–21) have no user-facing endpoints.
 
@@ -129,11 +129,11 @@
 
 | ID | Feature | Endpoint | Method | Auth | Status | Implementation | Contract | Notes |
 |---|---|---|---|---|---|---|---|---|
-| F-DSH-01 | Dashboard summary | `/api/dashboard/summary?from=&to=` | GET | `requireAuth` | ⬜ | `src/modules/dashboard/dashboard.service.ts` + `dashboard.mapper.ts` (missing) — composes `kamar`+`pembayaran` + Phase 16 + notification stats | `PLAN.md §2.9:397` `§1 item 9` | Additive `finance?: { totalReceivables, netOperatingIncomeThisMonth }`, `notifications?: { remindersSentToday, failedMessagesCount }`; never removes/renames existing keys |
+| F-DSH-01 | Dashboard summary | `/api/dashboard/summary?from=&to=` | GET | `requireAuth` | ✅ | `src/modules/dashboard/dashboard.service.ts:1` (`getDashboardSummary` via `getEffectiveRange` + 4 kamar counts + `groupBy` + `Decimal` outstanding + `receivable.getSummary` + `finance-report.getIncomeStatementReport` + 2 `notificationLog.count`), `src/modules/dashboard/dashboard.controller.ts:7` (`getRequestPropertyId`), `src/modules/dashboard/dashboard.route.ts:11` (`GET /summary` `requireAuth` + `validate(reportRangeSchema)`), `src/modules/dashboard/dashboard.mapper.ts:1` (`mapDashboardSummary` pass-through `number` guard), `src/modules/dashboard/dashboard.schema.ts:1` (re-exports `reportRangeSchema`), `src/routes/index.ts:48` (`/dashboard`) | `PLAN.md §2.9:397` `§1 item 9` | Additive `finance: { totalReceivables, netOperatingIncomeThisMonth }`, `notifications: { remindersSentToday, failedMessagesCount }` (always present, optional in contract still compatible); `finance.totalReceivables===receivables/summary`, `NIO===income-statement` effective range, `notifications` range-consistent + `startOfDay`; `kamar {total,terisi,kosong,occupancyRate}` `pembayaran {total,lunas,belumBayar,sebagian,terlambat,outstanding}` `number`; never renames/removes keys |
 
 ## 10) How to use
 
-- **Before coding:** pick next `⬜` in `PROGRESS.md §1` (Phase 17 is next). Implement exactly the row's `Contract` cell.
+- **Before coding:** pick next `⬜` in `PROGRESS.md §1` (Phase 18 is next). Implement exactly the row's `Contract` cell.
 - **After coding:** flip `Status` to `✅`/`🟡`, fill `Implementation` file:line, add the PR to `PROGRESS.md §1 Notes`, and tick `PLAN.md §3` acceptance criteria.
 - **Shape guard:** every monetary `Decimal→number` (`serialize.util.ts:12` + `Decimal.js` sums in `finance-report.service.ts`), `AgingBucket.label` literal set, `Pagination` shape (`page/pageSize/total/totalPages`), report `RevenueReport`/`ExpenseReport`/`CashFlowReport` shapes — contract suite in `PROGRESS.md §1 Phase 18` will fail otherwise.
 
