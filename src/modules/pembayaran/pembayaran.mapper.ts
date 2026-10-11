@@ -69,6 +69,10 @@ export function mapPembayaranList(pembayaran: any) {
     nominal: toNumberRequired(pembayaran.nominal),
     totalDibayar: toNumberRequired(pembayaran.totalDibayar),
     catatan: pembayaran.catatan,
+    financialAccountId: pembayaran.financialAccountId,
+    financialAccount: pembayaran.financialAccount
+      ? { id: pembayaran.financialAccount.id, name: pembayaran.financialAccount.name, type: pembayaran.financialAccount.type }
+      : null,
     createdAt: pembayaran.createdAt.toISOString(),
     updatedAt: pembayaran.updatedAt.toISOString(),
   }

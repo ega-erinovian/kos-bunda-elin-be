@@ -10,6 +10,14 @@ export async function listAccounts(propertyId: string) {
   })
 }
 
+export async function listAccountsForDropdown(propertyId: string) {
+  return prisma.financialAccount.findMany({
+    where: { propertyId, active: true },
+    select: { id: true, name: true, type: true },
+    orderBy: { createdAt: 'asc' },
+  })
+}
+
 export async function createAccount(propertyId: string, input: CreateFinancialAccountInput) {
   const existing = await prisma.financialAccount.findUnique({
     where: { propertyId_name: { propertyId, name: input.name } },

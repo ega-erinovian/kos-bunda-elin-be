@@ -185,6 +185,8 @@ model Pembayaran {
   nominal           Decimal          @db.Decimal(12, 2)
   totalDibayar      Decimal          @default(0) @db.Decimal(12, 2)
   catatan           String?
+  financialAccountId String
+  financialAccount   FinancialAccount @relation(fields: [financialAccountId], references: [id])
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
@@ -287,6 +289,7 @@ model FinancialAccount {
 
   transactions   FinancialTransaction[]
   paymentRecords PaymentRecord[]
+  pembayaran     Pembayaran[]
 
   @@unique([propertyId, name])
 }

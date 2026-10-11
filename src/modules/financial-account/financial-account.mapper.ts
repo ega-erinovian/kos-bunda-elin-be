@@ -1,5 +1,13 @@
 import { toNumberRequired } from '../../utils/serialize.util.js'
 
+export function mapFinancialAccountDropdown(a: any) {
+  return {
+    id: a.id,
+    name: a.name,
+    type: a.type,
+  }
+}
+
 export function mapFinancialAccount(a: any) {
   return {
     id: a.id,

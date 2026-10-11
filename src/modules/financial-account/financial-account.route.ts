@@ -8,6 +8,7 @@ const router = Router()
 router.use(requireAuth)
 
 router.get('/', controller.list)
+router.get('/dropdown', controller.listDropdown)
 router.post('/', validate(createFinancialAccountSchema), controller.create)
 router.patch('/:id', validate(idParamsSchema, 'params'), validate(updateFinancialAccountSchema), controller.update)
 

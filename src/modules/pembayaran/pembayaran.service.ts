@@ -31,6 +31,13 @@ async function findPembayaranById(id: string, includePaymentRecords = false) {
           kamar: { select: { id: true, nomor: true, lantai: true } },
         },
       },
+      financialAccount: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+        },
+      },
       paymentRecords: includePaymentRecords
         ? {
             orderBy: { paymentDate: 'asc' },
@@ -110,6 +117,9 @@ export async function getPembayaranList(query: PembayaranListQuery) {
             kamar: { select: { id: true, nomor: true, lantai: true } },
           },
         },
+        financialAccount: {
+          select: { id: true, name: true, type: true },
+        },
       },
     }),
     prisma.pembayaran.count({ where }),
@@ -139,6 +149,13 @@ export async function createPembayaran(input: CreatePembayaranInput) {
 
   if (!penyewa) {
     throw new AppError('Penyewa tidak ditemukan atau tidak aktif', 404)
+  }
+
+  const account = await prisma.financialAccount.findFirst({
+    where: { id: input.financialAccountId, propertyId, active: true },
+  })
+  if (!account) {
+    throw new AppError('FinancialAccount tidak ditemukan atau tidak aktif', 404)
   }
 
   const existing = await prisma.pembayaran.findUnique({
@@ -175,6 +192,7 @@ export async function createPembayaran(input: CreatePembayaranInput) {
       nominal: input.nominal,
       catatan: input.catatan,
       status,
+      financialAccountId: input.financialAccountId,
     },
     include: {
       penyewa: {
@@ -183,6 +201,9 @@ export async function createPembayaran(input: CreatePembayaranInput) {
           nama: true,
           kamar: { select: { nomor: true } },
         },
+      },
+      financialAccount: {
+        select: { id: true, name: true, type: true },
       },
     },
   })
@@ -194,12 +215,24 @@ export async function updatePembayaran(id: string, input: UpdatePembayaranInput)
     throw new AppError('Pembayaran tidak ditemukan', 404)
   }
 
+  const updateData: Prisma.PembayaranUncheckedUpdateInput = {
+    tanggalJatuhTempo: input.tanggalJatuhTempo,
+    catatan: input.catatan,
+  }
+
+  if (input.financialAccountId) {
+    const account = await prisma.financialAccount.findFirst({
+      where: { id: input.financialAccountId, propertyId: getDefaultPropertyId(), active: true },
+    })
+    if (!account) {
+      throw new AppError('FinancialAccount tidak ditemukan atau tidak aktif', 404)
+    }
+    updateData.financialAccountId = input.financialAccountId
+  }
+
   return prisma.pembayaran.update({
     where: { id: current.id },
-    data: {
-      tanggalJatuhTempo: input.tanggalJatuhTempo,
-      catatan: input.catatan,
-    },
+    data: updateData,
     include: {
       penyewa: {
         select: {
@@ -207,6 +240,9 @@ export async function updatePembayaran(id: string, input: UpdatePembayaranInput)
           nama: true,
           kamar: { select: { nomor: true } },
         },
+      },
+      financialAccount: {
+        select: { id: true, name: true, type: true },
       },
     },
   })
@@ -334,7 +370,7 @@ export async function addPaymentRecord(
       new Date()
     )
 
-    const updateData: Prisma.PembayaranUpdateInput = {
+  const updateData: Prisma.PembayaranUncheckedUpdateInput = {
       totalDibayar: newTotalDibayar as any,
       status: newStatus,
     }
@@ -356,6 +392,9 @@ export async function addPaymentRecord(
             nama: true,
             kamar: { select: { id: true, nomor: true } },
           },
+        },
+        financialAccount: {
+          select: { id: true, name: true, type: true },
         },
       },
     })
