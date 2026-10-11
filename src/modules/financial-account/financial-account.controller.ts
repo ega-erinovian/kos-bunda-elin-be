@@ -1,13 +1,21 @@
 import { Request, Response, NextFunction } from 'express'
 import { getRequestPropertyId } from '../../config/property.js'
 import * as service from './financial-account.service.js'
-import { mapFinancialAccount } from './financial-account.mapper.js'
+import { mapFinancialAccount, mapFinancialAccountDropdown } from './financial-account.mapper.js'
 
 export async function list(req: Request, res: Response, next: NextFunction) {
   try {
     const propertyId = getRequestPropertyId(req)
     const data = await service.listAccounts(propertyId)
     return res.json({ success: true, data: data.map(mapFinancialAccount) })
+  } catch (err) { next(err) }
+}
+
+export async function listDropdown(req: Request, res: Response, next: NextFunction) {
+  try {
+    const propertyId = getRequestPropertyId(req)
+    const data = await service.listAccountsForDropdown(propertyId)
+    return res.json({ success: true, data: data.map(mapFinancialAccountDropdown) })
   } catch (err) { next(err) }
 }
 

@@ -21,11 +21,13 @@ export const createPembayaranSchema = z.object({
     .positive({ message: 'nominal harus lebih dari 0' })
     .or(z.string().regex(/^\d+(\.\d{1,2})?$/).transform(Number)),
   catatan: z.string().optional(),
+  financialAccountId: z.string().uuid({ message: 'financialAccountId wajib diisi' }),
 })
 
 export const updatePembayaranSchema = z.object({
   tanggalJatuhTempo: z.coerce.date().optional(),
   catatan: z.string().optional().nullable(),
+  financialAccountId: z.string().uuid().optional(),
 })
 
 export const createPaymentRecordSchema = z.object({
