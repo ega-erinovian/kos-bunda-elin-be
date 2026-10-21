@@ -15,7 +15,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio",
-    "backfill:payment-records": "tsx scripts/backfill-payment-records.ts"
+    "backfill:payment-records": "tsx scripts/backfill-payment-records.ts",
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "",
