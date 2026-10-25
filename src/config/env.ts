@@ -17,6 +17,7 @@ const envSchema = z.object({
     .string()
     .default('false')
     .transform((v) => v === 'true'),
+  COOKIE_SAME_SITE: z.enum(['lax', 'none', 'strict']).default('lax'),
 
   DEFAULT_PROPERTY_ID: z.string().optional(),
 

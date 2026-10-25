@@ -41,7 +41,7 @@ function parseDuration(duration: string): number {
 const cookieOptions = {
   httpOnly: true,
   secure: env.COOKIE_SECURE,
-  sameSite: 'lax' as const,
+  sameSite: env.COOKIE_SAME_SITE as 'lax' | 'none' | 'strict',
   path: '/',
 }
 
