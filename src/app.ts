@@ -10,14 +10,12 @@ import logger from './config/logger.js'
 const app = express()
 
 app.use(helmet())
-app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }))
-app.use(
-  express.json({
-    verify: (req: any, _res, buf) => {
-      req.rawBody = buf.toString('utf8')
-    },
-  }),
-)
+app.use(cors({
+  origin: process.env.CORS_ORIGIN,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 app.use(pinoHttp({ logger }))
